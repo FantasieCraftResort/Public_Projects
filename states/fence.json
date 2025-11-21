@@ -1,0 +1,4 @@
+{
+  "label": "Fence Connections",
+  "values": ["north", "south", "east", "west"]
+}

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>WorldEdit Command Generator</title>
+    <style>
+      body {
+        background: #1e1e1e;
+        color: white;
+        font-family: Arial, sans-serif;
+        max-width: 700px;
+        margin: 40px auto;
+      }
+
+      h1 {
+        text-align: center;
+        color: #8bd5ff;
+      }
+
+      label {
+        font-weight: bold;
+        margin-top: 20px;
+        display: block;
+      }
+
+      .input-wrapper {
+        background: #2a2a2a;
+        border: 1px solid #444;
+        padding: 8px;
+        border-radius: 6px;
+        min-height: 46px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        cursor: text;
+      }
+
+      .chip {
+        background: #3a3f44;
+        padding: 5px 10px;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .chip span {
+        font-size: 14px;
+      }
+
+      .chip button {
+        background: transparent;
+        color: #ccc;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
+      }
+
+      .chip button:hover {
+        color: #ff6666;
+      }
+
+      .autocomplete {
+        background: #2b2b2b;
+        border: 1px solid #444;
+        border-radius: 6px;
+        margin-top: 4px;
+        max-height: 200px;
+        overflow-y: auto;
+        display: none;
+        position: absolute;
+        z-index: 50;
+        width: calc(100% - 20px);
+      }
+
+      .suggestion {
+        padding: 6px 10px;
+        cursor: pointer;
+      }
+
+      .suggestion:hover {
+        background: #3a3a3a;
+      }
+
+      input[type="text"] {
+        background: transparent;
+        border: none;
+        outline: none;
+        color: white;
+        flex: 1;
+        font-size: 16px;
+        padding: 5px;
+        min-width: 120px;
+      }
+
+      button.generate {
+        background: #007acc;
+        border: none;
+        color: white;
+        padding: 12px 18px;
+        font-size: 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        margin-top: 20px;
+      }
+
+      button.generate:hover {
+        background: #0090ff;
+      }
+
+      textarea {
+        width: 100%;
+        height: 80px;
+        background: #2a2a2a;
+        color: white;
+        border: 1px solid #555;
+        border-radius: 6px;
+        padding: 10px;
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>//replace Generator</h1>
+
+    <label>From blocks:</label>
+    <div class="input-wrapper" id="from-wrapper">
+      <input type="text" id="from-input" placeholder="Type block name..." />
+    </div>
+    <div class="autocomplete" id="from-suggestions"></div>
+
+    <label>To blocks:</label>
+    <div class="input-wrapper" id="to-wrapper">
+      <input type="text" id="to-input" placeholder="Type block name..." />
+    </div>
+    <div class="autocomplete" id="to-suggestions"></div>
+
+    <button class="generate" onclick="generateCommand()">
+      Generate Command
+    </button>
+
+    <label>Command output:</label>
+    <textarea id="output" readonly></textarea>
+
+    <script>
+      let allBlocks = [];
+
+      fetch("../blocks/blocks.json")
+        .then((r) => {
+          if (!r.ok) throw new Error("Network response was not ok");
+          return r.json();
+        })
+        .then((data) => {
+          allBlocks = (data && data.blocks) || [];
+        })
+        .catch((err) => {
+          console.error("Failed to load blocks.json:", err);
+          // Fallback to an empty list to avoid errors when suggestions are used
+          allBlocks = [];
+        });
+
+      function setupAutocomplete(inputId, wrapperId, suggestionId) {
+        const input = document.getElementById(inputId);
+        const wrapper = document.getElementById(wrapperId);
+        const suggestionBox = document.getElementById(suggestionId);
+
+        const blockList = [];
+
+        function refreshSuggestions() {
+          const value = input.value.trim().toLowerCase();
+          if (!value) {
+            suggestionBox.style.display = "none";
+            return;
+          }
+
+          const filtered = allBlocks
+            .filter((b) => b.includes(value))
+            .slice(0, 20);
+
+          suggestionBox.innerHTML = "";
+          filtered.forEach((block) => {
+            const div = document.createElement("div");
+            div.className = "suggestion";
+            div.textContent = block;
+            div.onclick = () => addBlock(block);
+            suggestionBox.appendChild(div);
+          });
+
+          suggestionBox.style.display = filtered.length ? "block" : "none";
+        }
+
+        function addBlock(name) {
+          if (blockList.includes(name)) return;
+
+          blockList.push(name);
+
+          const chip = document.createElement("div");
+          chip.className = "chip";
+
+          const text = document.createElement("span");
+          text.textContent = name;
+
+          const btn = document.createElement("button");
+          btn.textContent = "✕";
+          btn.onclick = () => {
+            wrapper.removeChild(chip);
+            blockList.splice(blockList.indexOf(name), 1);
+          };
+
+          chip.appendChild(text);
+          chip.appendChild(btn);
+
+          wrapper.insertBefore(chip, input);
+
+          input.value = "";
+          suggestionBox.style.display = "none";
+        }
+
+        input.addEventListener("input", refreshSuggestions);
+
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === ",") {
+            e.preventDefault();
+            const value = input.value.trim();
+            if (value) addBlock(value);
+          }
+        });
+
+        return blockList;
+      }
+
+      const fromBlocks = setupAutocomplete(
+        "from-input",
+        "from-wrapper",
+        "from-suggestions"
+      );
+      const toBlocks = setupAutocomplete(
+        "to-input",
+        "to-wrapper",
+        "to-suggestions"
+      );
+
+      function generateCommand() {
+        if (!fromBlocks.length || !toBlocks.length) {
+          document.getElementById("output").value =
+            "Please add blocks to both fields.";
+          return;
+        }
+
+        const cmd = `//replace ${fromBlocks.join(",")} ${toBlocks.join(",")}`;
+        document.getElementById("output").value = cmd;
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,72 @@
+{
+  "categories": {
+    "directional": {
+      "facing": ["north", "south", "east", "west", "up", "down"]
+    },
+    "horizontal_facing": {
+      "facing": ["north", "south", "east", "west"]
+    },
+    "rotatable": {
+      "axis": ["x", "y", "z"]
+    },
+    "slab": {
+      "type": ["top", "bottom", "double"]
+    },
+    "stairs": {
+      "facing": ["north", "south", "east", "west"],
+      "half": ["top", "bottom"],
+      "shape": [
+        "straight",
+        "inner_left",
+        "inner_right",
+        "outer_left",
+        "outer_right"
+      ]
+    },
+    "fence": {
+      "north": ["true", "false"],
+      "east": ["true", "false"],
+      "south": ["true", "false"],
+      "west": ["true", "false"],
+      "waterlogged": ["true", "false"]
+    },
+    "ageable": {
+      "age": ["0", "1", "2", "3", "4", "5", "6", "7"]
+    },
+    "powered": {
+      "powered": ["true", "false"]
+    },
+    "waterlogged": {
+      "waterlogged": ["true", "false"]
+    }
+  },
+  "blocks": {
+    "oak_log": "rotatable",
+    "spruce_log": "rotatable",
+    "birch_log": "rotatable",
+
+    "oak_stairs": "stairs",
+    "birch_stairs": "stairs",
+    "stone_stairs": "stairs",
+
+    "oak_slab": "slab",
+    "stone_slab": "slab",
+
+    "oak_fence": "fence",
+    "birch_fence": "fence",
+
+    "furnace": "directional",
+    "dispenser": "directional",
+    "dropper": "directional",
+
+    "lever": "powered",
+    "redstone_torch": "powered",
+
+    "oak_door": "horizontal_facing",
+    "oak_trapdoor": "horizontal_facing",
+
+    "wheat": "ageable",
+    "carrots": "ageable",
+    "potatoes": "ageable"
+  }
+}

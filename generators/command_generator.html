@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Block Selector With States</title>
+    <style>
+      .block-container {
+        display: inline-block;
+        width: 120px;
+        padding: 10px;
+        margin: 10px;
+        border: 2px solid #ccc;
+        border-radius: 8px;
+        text-align: center;
+        cursor: pointer;
+        background: #f5f5f5;
+        position: relative;
+      }
+
+      .state-menu {
+        display: none;
+        position: absolute;
+        top: 110%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: white;
+        border: 1px solid #aaa;
+        padding: 12px;
+        border-radius: 6px;
+        z-index: 100;
+        width: 200px;
+      }
+
+      .state-menu.visible {
+        display: block;
+      }
+
+      .state-menu h4 {
+        margin: 6px 0;
+      }
+
+      .state-menu label {
+        display: block;
+        margin-bottom: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="block-list"></div>
+
+    <script>
+      let stateTypes = {};
+      let blockList = []; // loaded from your existing blocks.json
+      let activeMenus = new Map();
+
+      async function loadData() {
+        blockList = await (await fetch("../blocks/blocks.json")).json();
+        stateTypes = await (await fetch("../states/stateTypes.json")).json();
+        blockStates = await (await fetch("../blocks/blockstates.json")).json();
+        renderBlocks();
+      }
+
+      function renderBlocks() {
+        const container = document.getElementById("block-list");
+        container.innerHTML = "";
+
+        blockList.forEach((block) => {
+          const div = document.createElement("div");
+          div.className = "block-container";
+
+          div.innerHTML = `
+            <strong>${block.name}</strong><br>
+            <em>${block.type}</em><br>
+            <button onclick="toggleStateMenu(event, '${block.id}', '${block.type}')">⚙ States</button>
+            <div class="state-menu" id="menu-${block.id}"></div>
+        `;
+
+          container.appendChild(div);
+        });
+      }
+
+      async function toggleStateMenu(event, blockId, blockType) {
+        event.stopPropagation();
+        const menu = document.getElementById(`menu-${blockId}`);
+
+        if (menu.classList.contains("visible")) {
+          menu.classList.remove("visible");
+          return;
+        }
+
+        menu.innerHTML = "Loading...";
+
+        const groups = stateTypes[blockType] ?? [];
+        let html = "";
+
+        for (const group of groups) {
+          const stateData = await (await fetch(`states/${group}.json`)).json();
+          html += `<h4>${stateData.label}</h4>`;
+
+          stateData.values.forEach((v) => {
+            html += `
+                <label>
+                    <input type="checkbox"
+                        onchange="updateBlockState('${blockId}', '${group}', '${v}')">
+                    ${v}
+                </label>`;
+          });
+        }
+
+        menu.innerHTML = html;
+        menu.classList.add("visible");
+
+        activeMenus.set(blockId, {});
+      }
+
+      function updateBlockState(blockId, group, value) {
+        if (!activeMenus.has(blockId)) activeMenus.set(blockId, {});
+
+        const stateMap = activeMenus.get(blockId);
+
+        if (!stateMap[group]) stateMap[group] = new Set();
+
+        if (stateMap[group].has(value)) {
+          stateMap[group].delete(value);
+        } else {
+          stateMap[group].add(value);
+        }
+
+        generateOutput(blockId);
+      }
+
+      function generateOutput(blockId) {
+        const block = blockList.find((b) => b.id === blockId);
+        const stateMap = activeMenus.get(blockId);
+        const results = [];
+
+        function buildStates(stateMap) {
+          const entries = Object.entries(stateMap);
+
+          function recurse(i, current) {
+            if (i === entries.length) {
+              results.push(`${blockId}[${current.join(",")}]`);
+              return;
+            }
+
+            const [group, values] = entries[i];
+            for (const val of values) {
+              recurse(i + 1, [...current, `${group}=${val}`]);
+            }
+          }
+
+          recurse(0, []);
+        }
+
+        buildStates(stateMap);
+        console.log("Generated:", results);
+      }
+
+      loadData();
+    </script>
+  </body>
+</html>

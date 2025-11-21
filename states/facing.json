@@ -1,0 +1,4 @@
+{
+  "label": "Facing Direction",
+  "values": ["north", "south", "east", "west"]
+}

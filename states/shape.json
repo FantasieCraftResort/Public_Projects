@@ -1,0 +1,10 @@
+{
+  "label": "Stair Shape",
+  "values": [
+    "straight",
+    "inner_left",
+    "inner_right",
+    "outer_left",
+    "outer_right"
+  ]
+}

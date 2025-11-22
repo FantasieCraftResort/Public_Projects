@@ -1,0 +1,72 @@
+{
+  "oak_stairs": "stairs",
+  "spruce_stairs": "stairs",
+  "birch_stairs": "stairs",
+  "jungle_stairs": "stairs",
+  "acacia_stairs": "stairs",
+  "dark_oak_stairs": "stairs",
+  "mangrove_stairs": "stairs",
+  "cherry_stairs": "stairs",
+  "bamboo_stairs": "stairs",
+  "stone_stairs": "stairs",
+  "cobblestone_stairs": "stairs",
+  "sandstone_stairs": "stairs",
+  "red_sandstone_stairs": "stairs",
+  "brick_stairs": "stairs",
+  "stone_brick_stairs": "stairs",
+  "mud_brick_stairs": "stairs",
+
+  "oak_slab": "slab",
+  "stone_slab": "slab",
+  "cobblestone_slab": "slab",
+  "polished_diorite_slab": "slab",
+  "polished_andesite_slab": "slab",
+
+  "oak_fence": "fence",
+  "spruce_fence": "fence",
+  "birch_fence": "fence",
+  "jungle_fence": "fence",
+  "dark_oak_fence": "fence",
+  "mangrove_fence": "fence",
+
+  "cobblestone_wall": "wall",
+  "mossy_cobblestone_wall": "wall",
+  "stone_brick_wall": "wall",
+  "mud_brick_wall": "wall",
+
+  "oak_log": "axis",
+  "spruce_log": "axis",
+  "birch_log": "axis",
+  "jungle_log": "axis",
+  "acacia_log": "axis",
+  "dark_oak_log": "axis",
+  "mangrove_log": "axis",
+  "warped_stem": "axis",
+  "crimson_stem": "axis",
+
+  "furnace": "horizontal_facing",
+  "blast_furnace": "horizontal_facing",
+  "smoker": "horizontal_facing",
+  "barrel": "horizontal_facing",
+  "pumpkin": "horizontal_facing",
+  "carved_pumpkin": "horizontal_facing",
+
+  "lever": "lever",
+
+  "oak_trapdoor": "trapdoor",
+  "iron_trapdoor": "trapdoor",
+
+  "oak_door": "door",
+  "birch_door": "door",
+  "iron_door": "door",
+
+  "stone_button": "horizontal_facing",
+  "oak_button": "horizontal_facing",
+
+  "lantern": "waterlogged",
+
+  "campfire": "lit",
+  "soul_campfire": "lit",
+
+  "redstone_lamp": "lit"
+}

@@ -1,0 +1,123 @@
+{
+  "directional": {
+    "facing": ["north", "south", "east", "west", "up", "down"]
+  },
+  "horizontal_facing": {
+    "facing": ["north", "south", "east", "west"]
+  },
+  "axis": {
+    "axis": ["x", "y", "z"]
+  },
+  "rotatable": {
+    "rotation": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15"
+    ]
+  },
+  "waterlogged": {
+    "waterlogged": ["true", "false"]
+  },
+  "lit": {
+    "lit": ["true", "false"]
+  },
+  "powered": {
+    "powered": ["true", "false"]
+  },
+  "age_25": {
+    "age": [
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
+      "10",
+      "11",
+      "12",
+      "13",
+      "14",
+      "15",
+      "16",
+      "17",
+      "18",
+      "19",
+      "20",
+      "21",
+      "22",
+      "23",
+      "24"
+    ]
+  },
+  "age_3": {
+    "age": ["0", "1", "2", "3"]
+  },
+  "age_1": {
+    "age": ["0", "1"]
+  },
+  "slab": {
+    "type": ["top", "bottom", "double"]
+  },
+  "stairs": {
+    "facing": ["north", "south", "east", "west"],
+    "half": ["top", "bottom"],
+    "shape": [
+      "straight",
+      "inner_left",
+      "inner_right",
+      "outer_left",
+      "outer_right"
+    ],
+    "waterlogged": ["true", "false"]
+  },
+  "fence": {
+    "north": ["true", "false"],
+    "south": ["true", "false"],
+    "east": ["true", "false"],
+    "west": ["true", "false"],
+    "waterlogged": ["true", "false"]
+  },
+  "wall": {
+    "north": ["none", "low", "tall"],
+    "south": ["none", "low", "tall"],
+    "east": ["none", "low", "tall"],
+    "west": ["none", "low", "tall"],
+    "up": ["true", "false"]
+  },
+  "door": {
+    "facing": ["north", "south", "east", "west"],
+    "hinge": ["left", "right"],
+    "half": ["upper", "lower"],
+    "open": ["true", "false"],
+    "powered": ["true", "false"]
+  },
+  "trapdoor": {
+    "facing": ["north", "south", "east", "west"],
+    "half": ["top", "bottom"],
+    "open": ["true", "false"],
+    "powered": ["true", "false"],
+    "waterlogged": ["true", "false"]
+  },
+  "lever": {
+    "face": ["floor", "wall", "ceiling"],
+    "facing": ["north", "south", "east", "west"],
+    "powered": ["true", "false"]
+  }
+}

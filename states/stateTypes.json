@@ -1,7 +1,0 @@
-{
-  "normal": [],
-  "directional": ["facing"],
-  "stairs": ["facing", "half", "shape"],
-  "slab": ["type"],
-  "fence": ["north", "south", "east", "west"]
-}

@@ -1,0 +1,441 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minecraft Block Selector</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background-color: #f0f0f0;
+        color: #333;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+    }
+    .container {
+        background-color: #e0e0e0;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+       500px;
+    }
+    h2 {
+        margin-bottom: 20px;
+    }
+    .file-upload {
+        margin-bottom: 15px;
+        text-align: left;
+    }
+    input[type="file"] {
+        margin-top: 5px;
+        width: 100%;
+    }
+    label {
+        font-weight: bold;
+        display: block;
+        margin-top: 15px;
+        margin-bottom: 5px;
+    }
+    input[type="text"] {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        margin-bottom: 10px;
+    }
+    .chip-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        justify-content: center;
+        margin-bottom: 10px;
+    }
+    .chip {
+        background-color: #b0b0b0;
+        border-radius: 16px;
+        padding: 5px 10px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        color: #fff;
+        cursor: pointer;
+        position: relative;
+        min-width: 140px;
+    }
+    .chip-header {
+        display: flex;
+        justify-content: space-between;
+        width: 100%;
+    }
+    .chip button {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
+        color: #fff;
+    }
+    .chip-condition {
+        font-size: 12px;
+        color: #f9f9f9;
+        margin-top: 4px;
+    }
+    .chip-states {
+        font-size: 12px;
+        color: #f9f9f9;
+        margin-top: 4px;
+    }
+    .output-container {
+        margin-top: 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+    }
+    .output {
+        font-weight: bold;
+        color: #444;
+        background-color: #d0d0d0;
+        padding: 10px;
+        border-radius: 5px;
+        width: 100%;
+        text-align: center;
+        word-break: break-word;
+    }
+    .copy-btn {
+        background-color: #666;
+        color: #fff;
+        border: none;
+        padding: 8px 15px;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 14px;
+    }
+    .copy-btn:hover {
+        background-color: #555;
+    }
+    .autocomplete-list {
+        background: #fff;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        max-height: 150px;
+        overflow-y: auto;
+        position: absolute;
+        width: calc(100% - 20px);
+        z-index: 10;
+    }
+    .autocomplete-item {
+        padding: 8px;
+        cursor: pointer;
+    }
+    .autocomplete-item:hover {
+        background-color: #eee;
+    }
+    .state-dropdown {
+        position: absolute;
+        top: 35px;
+        left: 0;
+        background: #fff;
+        color: #333;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        padding: 10px;
+        z-index: 20;
+        display: none;
+        width: 220px;
+    }
+    .state-dropdown label {
+        font-size: 14px;
+        display: block;
+        margin-top: 5px;
+    }
+    .state-dropdown select, .state-dropdown input {
+        width: 100%;
+        margin-bottom: 5px;
+    }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Minecraft Block Selector</h2>
+
+    <!-- File Uploads -->
+    <div class="file-upload">
+        <label>Upload blocks.json:</label>
+        <input type="file" id="blocksFile" accept=".json">
+    </div>
+    <div class="file-upload">
+        <label>Upload categories.json:</label>
+        <input type="file" id="categoriesFile" accept=".json">
+    </div>
+    <div class="file-upload">
+        <label>Upload states.json:</label>
+        <input type="file" id="statesFile" accept=".json">
+    </div>
+
+    <label>From:</label>
+    <div style="position:relative;">
+        <input type="text" id="fromInput" placeholder="Type and press Enter">
+        <div id="fromAutocomplete" class="autocomplete-list" style="display:none;"></div>
+    </div>
+    <div id="fromChips" class="chip-container"></div>
+
+    <label>To:</label>
+    <div style="position:relative;">
+        <input type="text" id="toInput" placeholder="Type and press Enter">
+        <div id="toAutocomplete" class="autocomplete-list" style="display:none;"></div>
+    </div>
+    <div id="toChips" class="chip-container"></div>
+
+    <div class="output-container">
+        <div class="output" id="commandOutput">//replace </div>
+        <button class="copy-btn" id="copyBtn">Copy Command</button>
+    </div>
+</div>
+
+<script>
+    const fromInput = document.getElementById('fromInput');
+    const toInput = document.getElementById('toInput');
+    const fromChipsContainer = document.getElementById('fromChips');
+    const toChipsContainer = document.getElementById('toChips');
+    const commandOutput = document.getElementById('commandOutput');
+    const fromAutocomplete = document.getElementById('fromAutocomplete');
+    const toAutocomplete = document.getElementById('toAutocomplete');
+    const copyBtn = document.getElementById('copyBtn');
+
+    let blocks = [];
+    let categories = {};
+    let states = {};
+    let fromChips = [];
+    let toChips = [];
+    let chipData = {};
+
+    // File upload handlers
+    document.getElementById('blocksFile').addEventListener('change', e => loadJSON(e.target.files[0], data => blocks = data.blocks));
+    document.getElementById('categoriesFile').addEventListener('change', e => loadJSON(e.target.files[0], data => categories = data));
+    document.getElementById('statesFile').addEventListener('change', e => loadJSON(e.target.files[0], data => states = data));
+
+    function loadJSON(file, callback) {
+        const reader = new FileReader();
+        reader.onload = () => callback(JSON.parse(reader.result));
+        reader.readAsText(file);
+    }
+
+    function updateCommand() {
+        const fromPart = fromChips.map(chip => formatChip(chip)).join(',');
+        const toPart = toChips.map(chip => formatChip(chip)).join(',');
+        commandOutput.textContent = `//replace ${fromPart} ${toPart}`;
+    }
+
+    function formatChip(chip) {
+        const data = chipData[chip];
+        let base = chip;
+        if (data.secondBlock && data.position) {
+            const prefix = data.position === 'above' ? '>' : '<';
+            base = `"${prefix}${chip} ${data.secondBlock}"`;
+        }
+        if (data.states && Object.keys(data.states).length) {
+            const stateEntries = Object.entries(data.states).map(([k,v]) => `${k}=${v}`);
+            base += `[${stateEntries.join(',')}]`;
+        }
+        return base;
+    }
+
+    function createChip(text, container, chipArray) {
+        if (chipArray.includes(text)) return;
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+
+        const header = document.createElement('div');
+        header.className = 'chip-header';
+        const span = document.createElement('span');
+        span.textContent = text;
+        const button = document.createElement('button');
+        button.textContent = '×';
+        button.onclick = (e) => {
+            e.stopPropagation();
+            container.removeChild(chip);
+            chipArray.splice(chipArray.indexOf(text), 1);
+            delete chipData[text];
+            updateCommand();
+        };
+        header.appendChild(span);
+        header.appendChild(button);
+        chip.appendChild(header);
+
+        const conditionDisplay = document.createElement('div');
+        conditionDisplay.className = 'chip-condition';
+        chip.appendChild(conditionDisplay);
+
+        const stateDisplay = document.createElement('div');
+        stateDisplay.className = 'chip-states';
+        chip.appendChild(stateDisplay);
+
+        container.appendChild(chip);
+        chipArray.push(text);
+        chipData[text] = { block: text, secondBlock: null, position: null, states: {} };
+        updateCommand();
+
+        const dropdown = document.createElement('div');
+        dropdown.className = 'state-dropdown';
+        chip.appendChild(dropdown);
+
+        chip.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+            if (dropdown.style.display === 'block') {
+                dropdown.innerHTML = '';
+
+                const posLabel = document.createElement('label');
+                posLabel.textContent = 'Position:';
+                const posSelect = document.createElement('select');
+                ['none','above','under'].forEach(val => {
+                    const option = document.createElement('option');
+                    option.value = val === 'none' ? '' : val;
+                    option.textContent = val;
+                    posSelect.appendChild(option);
+                });
+                dropdown.appendChild(posLabel);
+                dropdown.appendChild(posSelect);
+
+                const secondLabel = document.createElement('label');
+                secondLabel.textContent = 'Second Block:';
+                const secondInput = document.createElement('input');
+                secondInput.placeholder = 'Type block name';
+                secondInput.style.display = 'none';
+                dropdown.appendChild(secondLabel);
+                dropdown.appendChild(secondInput);
+
+                posSelect.onchange = () => {
+                    chipData[text].position = posSelect.value || null;
+                    secondInput.style.display = posSelect.value ? 'block' : 'none';
+                    updateConditionDisplay();
+                    updateCommand();
+                };
+
+                secondInput.oninput = () => {
+                    const query = secondInput.value.toLowerCase();
+                    let suggestionBox = dropdown.querySelector('.autocomplete-list');
+                    if (!suggestionBox) {
+                        suggestionBox = document.createElement('div');
+                        suggestionBox.className = 'autocomplete-list';
+                        dropdown.appendChild(suggestionBox);
+                    }
+                    suggestionBox.innerHTML = '';
+                    if (!query) {
+                        suggestionBox.style.display = 'none';
+                        return;
+                    }
+                    const suggestions = blocks.filter(item => item.toLowerCase().includes(query));
+                    suggestions.forEach(item => {
+                        const div = document.createElement('div');
+                        div.className = 'autocomplete-item';
+                        div.textContent = item;
+                        div.onclick = () => {
+                            chipData[text].secondBlock = item;
+                            secondInput.value = item;
+                            suggestionBox.style.display = 'none';
+                            updateConditionDisplay();
+                            updateCommand();
+                        };
+                        suggestionBox.appendChild(div);
+                    });
+                    suggestionBox.style.display = suggestions.length ? 'block' : 'none';
+                };
+
+                function updateConditionDisplay() {
+                    const pos = chipData[text].position;
+                    const second = chipData[text].secondBlock;
+                    conditionDisplay.textContent = pos && second ? `${pos}: ${second}` : '';
+                }
+
+                const category = categories[text];
+                if (category && states[category]) {
+                    const stateDefs = states[category];
+                    for (let key in stateDefs) {
+                        const label = document.createElement('label');
+                        label.textContent = key;
+                        const select = document.createElement('select');
+                        stateDefs[key].forEach(val => {
+                            const option = document.createElement('option');
+                            option.value = val;
+                            option.textContent = val;
+                            select.appendChild(option);
+                        });
+                        select.onchange = () => {
+                            chipData[text].states[key] = select.value;
+                            stateDisplay.textContent = Object.entries(chipData[text].states)
+                                .map(([k,v]) => `${k}=${v}`).join(', ');
+                            updateCommand();
+                        };
+                        dropdown.appendChild(label);
+                        dropdown.appendChild(select);
+                    }
+                }
+            }
+        });
+
+        dropdown.addEventListener('click', (e) => e.stopPropagation());
+        document.body.addEventListener('click', () => dropdown.style.display = 'none');
+    }
+
+    function showAutocomplete(input, listElement, chipArray, container) {
+        const query = input.value.toLowerCase();
+        if (!query) {
+            listElement.style.display = 'none';
+            return;
+        }
+        const suggestions = blocks.filter(item => item.toLowerCase().includes(query) && !chipArray.includes(item));
+        listElement.innerHTML = '';
+        if (suggestions.length === 0) {
+            listElement.style.display = 'none';
+            return;
+        }
+        suggestions.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'autocomplete-item';
+            div.textContent = item;
+            div.onclick = () => {
+                createChip(item, container, chipArray);
+                input.value = '';
+                listElement.style.display = 'none';
+            };
+            listElement.appendChild(div);
+        });
+        listElement.style.display = 'block';
+    }
+
+    fromInput.addEventListener('input', () => showAutocomplete(fromInput, fromAutocomplete, fromChips, fromChipsContainer));
+    toInput.addEventListener('input', () => showAutocomplete(toInput, toAutocomplete, toChips, toChipsContainer));
+
+    fromInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && fromInput.value.trim() !== '') {
+            createChip(fromInput.value.trim(), fromChipsContainer, fromChips);
+            fromInput.value = '';
+            fromAutocomplete.style.display = 'none';
+        }
+    });
+
+    toInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && toInput.value.trim() !== '') {
+            createChip(toInput.value.trim(), toChipsContainer, toChips);
+            toInput.value = '';
+            toAutocomplete.style.display = 'none';
+        }
+    });
+
+    copyBtn.addEventListener('click', () => {
+        const text = commandOutput.textContent;
+        navigator.clipboard.writeText(text).then(() => {
+            copyBtn.textContent = 'Copied!';
+            setTimeout(() => copyBtn.textContent = 'Copy Command', 1500);
+        });
+    });
+</script>
+
+</body>
+</html>

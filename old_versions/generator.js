@@ -39,6 +39,9 @@ async function init() {
 }
 init();
 
+setupSuggestions(fromInput, $("fromSuggestions"), (block) => addChip(block, selectedFrom));
+setupSuggestions(toInput, $("toSuggestions"), (block) => addChip(block, selectedTo));
+
 /* ----------------- AUTOCOMPLETE ----------------- */
 function setupSuggestions(inputEl, suggestionsEl, onPick) {
   inputEl.addEventListener("input", () => {

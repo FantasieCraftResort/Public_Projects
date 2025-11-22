@@ -1,0 +1,12 @@
+
+{
+  "stairs": {
+    "facing": ["north", "south", "east", "west"],
+    "half": ["top", "bottom"],
+    "shape": ["straight", "inner_left", "inner_right", "outer_left", "outer_right"]
+  },
+  "slabs": {
+    "type": ["top", "bottom", "double"]
+  },
+  "basic": {}
+}

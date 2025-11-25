@@ -1,0 +1,642 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Minecraft Show Sequencer — v2</title>
+<style>
+  :root{
+    --left-w:180px;
+    --track-h:64px;
+    --track-gap:8px;
+    --timeline-bg:#e9f7ff;
+  }
+  body{font-family: Inter, system-ui, Arial; margin:16px; background:#f4f6f8; color:#1b2733;}
+  .container{background:white;border-radius:8px;padding:12px;box-shadow:0 6px 20px rgba(18,38,63,0.06);width:100%;}
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+  .controls{display:flex;gap:8px;align-items:center;}
+  button{padding:6px 10px;border-radius:8px;border:1px solid #cbd5df;background:white; cursor:pointer;}
+  .timeline-wrap{display:flex; border-radius:8px; overflow:hidden; border:1px solid #c7d7e6;}
+  .left{width:var(--left-w); background:#e6f2f8; padding:8px; box-sizing:border-box; display:flex; flex-direction:column; gap:8px;}
+  .left .track-row{height:var(--track-h); display:flex; align-items:center; padding-left:8px; border-radius:8px;}
+  .left .track-row input{border:none;background:transparent;font-weight:600; width:100%;}
+  .main{flex:1; position:relative; background:var(--timeline-bg); overflow:auto;}
+  .time-ruler{height:32px;border-bottom:1px solid #d7e6ef; position:sticky; top:0; background:linear-gradient(180deg,#f8fdff,transparent); z-index:15;}
+  .ruler-inner{position:relative;height:100%;min-width:1600px;}
+  .ruler-mark{position:absolute; top:6px; font-size:12px; transform:translateX(-50%); color:#4f6b7a;}
+  .tracks{padding:12px; box-sizing:border-box; min-width:1600px; position:relative; z-index:5;}
+  .track-row{height:var(--track-h); margin-bottom:var(--track-gap); position:relative; border-radius:6px;}
+  .track-bg{position:absolute; left:0; right:0; top:0; bottom:0; border-radius:6px; background: linear-gradient(180deg,#ffffff00,#ffffff00);}
+  .grid-line{position:absolute;height:100%; top:0; border-left:1px dashed rgba(80,110,130,0.06);}
+  /* keyframe diamond */
+  .keyframe{position:absolute;width:22px;height:22px; transform:translate(-50%,-50%) rotate(45deg); background:#ffcf96; border:2px solid #f1a532; box-shadow:0 6px 14px rgba(28,40,50,0.12); cursor:pointer; display:flex;align-items:center;justify-content:center; z-index:30;}
+  .keyframe span{transform:rotate(-45deg); display:block; font-size:11px; font-weight:700; color:#3b2d1b; pointer-events:none; line-height:1;}
+  .keyframe.highlight{ box-shadow:0 0 16px rgba(241,165,50,0.8); transform: translate(-50%,-50%) rotate(45deg) scale(1.25); transition: transform 160ms ease, box-shadow 160ms ease; }
+  .playhead{position:absolute;top:0;bottom:0;width:2px;background:#1387bf; z-index:40;}
+  .range{position:absolute; height:34px; top:0; background:rgba(164,120,204,0.18); border-radius:6px; z-index:20; display:flex; align-items:center;}
+  .range .handle{width:12px; height:100%; background:rgba(164,120,204,0.35); cursor:ew-resize; border-radius:4px;}
+  .footer{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+  input[type=number]{width:80px;padding:4px;border-radius:6px;border:1px solid #d2e1ea;}
+  .small{font-size:13px;padding:6px 8px}
+  .toolbar{display:flex;gap:8px;align-items:center;}
+  .status{font-size:13px;color:#3b5664;}
+  /* modal */
+  .modal-overlay{position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(10,20,30,0.35);display:flex;align-items:center;justify-content:center;z-index:200;}
+  .modal{width:720px;background:white;border-radius:12px;padding:16px;box-shadow:0 12px 36px rgba(9,20,34,0.28);max-height:86vh;overflow:auto;}
+  .modal h3{margin:0 0 8px 0;}
+  .modal .row{display:flex;gap:8px;margin-bottom:8px;}
+  .modal label{width:120px;font-weight:600;color:#2e3f4d;font-size:13px}
+  .modal input[type=text], .modal input[type=number], .modal textarea, .modal select{flex:1;padding:6px;border-radius:6px;border:1px solid #d7e7ef;}
+  .modal textarea{min-height:60px; resize:vertical;}
+  .modal .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;}
+  .muted{color:#607d8b;font-size:13px}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:12px">
+      <h3 style="margin:0">Minecraft Show Sequencer</h3>
+      <div class="controls">
+        <button id="zoom-in">Zoom +</button>
+        <button id="zoom-out">Zoom −</button>
+        <label class="small">Snap <input type="checkbox" id="snap" checked></label>
+        <label class="small">to <input id="snap-interval" type="number" value="0.25" min="0.01" step="0.01"> s</label>
+      </div>
+    </div>
+    <div class="toolbar">
+      <button id="play">Play ▶</button>
+      <button id="stop">Stop ■</button>
+      <button id="add-key">Add Keyframe</button>
+      <button id="export">Export JSON</button>
+      <input id="import-file" type="file" accept=".json" style="display:none">
+      <button id="import">Import JSON</button>
+      <span class="status" id="time-display">0.00s</span>
+    </div>
+  </div>
+
+  <div class="timeline-wrap">
+    <div class="left" id="left-panel"></div>
+    <div class="main" id="main-panel">
+      <div class="time-ruler"><div class="ruler-inner" id="ruler"></div></div>
+      <div class="tracks" id="tracks"></div>
+      <div class="playhead" id="playhead" style="left:0"></div>
+      <div class="range" id="range" style="display:none;">
+        <div class="handle" id="range-left" style="border-top-left-radius:6px;border-bottom-left-radius:6px"></div>
+        <div style="flex:1"></div>
+        <div class="handle" id="range-right" style="border-top-right-radius:6px;border-bottom-right-radius:6px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div>
+      <button id="add-track">+ Add Track</button>
+    </div>
+    <div>
+      <label class="small">Duration (s) <input id="duration" type="number" value="60" min="1"></label>
+      <label class="small">Scale px/s <input id="scale" type="number" value="20" min="5"></label>
+    </div>
+  </div>
+</div>
+
+<!-- Modal placeholder -->
+<div id="modal-root"></div>
+
+<script>
+/* ---------- Data model ---------- */
+let state = {
+  duration: 60,
+  pxPerSec: 20,
+  tracks: [ {name:'Effect 1'}, {name:'Effect 2'}, {name:'Effect 3'} ],
+  keyframes: [
+    {id: genId(), trackIndex:0, time:4.0, label:'A', props: defaultProps('A')},
+    {id: genId(), trackIndex:1, time:8.0, label:'A', props: defaultProps('A')},
+    {id: genId(), trackIndex:2, time:12.0, label:'Q', props: defaultProps('Q')},
+    {id: genId(), trackIndex:0, time:22.5, label:'C', props: defaultProps('C')},
+    {id: genId(), trackIndex:0, time:34.2, label:'R', props: defaultProps('R')},
+  ],
+  playTime: 0,
+  playing: false,
+  snap: true,
+  snapInterval: 0.25,
+  range: null,
+};
+
+function defaultProps(label){
+  return {
+    name: label || '',
+    type: 'EFFECT_A',
+    location: 'systeem',
+    coords: { x:-647.501, y:23.000, z:-134.446 },
+    sequencer: '0: 0.1, 1; 50: 0.4, 1; 100: 0.1, 1',
+    block: 'BLUE_STAINED_GLASS',
+    blockData: '[]',
+    duration: 40,
+    amount: 15,
+    randomizer: 0.0,
+    delay: 40
+  };
+}
+
+function genId(){ return Math.random().toString(36).slice(2,9); }
+
+/* ---------- DOM refs ---------- */
+const leftPanel = document.getElementById('left-panel');
+const tracksEl = document.getElementById('tracks');
+const ruler = document.getElementById('ruler');
+const playhead = document.getElementById('playhead');
+const rangeEl = document.getElementById('range');
+
+const durationInput = document.getElementById('duration');
+const scaleInput = document.getElementById('scale');
+const snapInput = document.getElementById('snap');
+const snapIntervalInput = document.getElementById('snap-interval');
+const timeDisplay = document.getElementById('time-display');
+
+const modalRoot = document.getElementById('modal-root');
+
+/* ---------- helpers ---------- */
+function secToPx(s){ return s * state.pxPerSec; }
+function pxToSec(px){ return px / state.pxPerSec; }
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+/* ---------- render ---------- */
+function render(){
+  // adapt sizes
+  const mainWidth = Math.max(1200, Math.ceil(secToPx(state.duration)));
+  ruler.style.width = mainWidth + 'px';
+  tracksEl.style.minWidth = mainWidth + 'px';
+
+  // render ruler marks
+  ruler.innerHTML = '';
+  const interval = chooseRulerInterval();
+  for(let t=0;t<=state.duration;t+=interval){
+    const x = secToPx(t);
+    const mark = document.createElement('div');
+    mark.className = 'ruler-mark';
+    mark.style.left = x + 'px';
+    mark.textContent = t.toFixed(0) + 's';
+    ruler.appendChild(mark);
+    // one vertical guide line (we append to tracks as simple element)
+    const grid = document.createElement('div');
+    grid.className = 'grid-line';
+    grid.style.left = x + 'px';
+    grid.style.height = `calc(var(--track-h))`;
+    grid.style.top = 0;
+    grid.style.opacity = 0.05;
+    tracksEl.appendChild(grid);
+  }
+
+  // left panel rows (aligned)
+  leftPanel.innerHTML = '';
+  state.tracks.forEach((t,i)=>{
+    const row = document.createElement('div');
+    row.className = 'track-row';
+    row.style.height = 'var(--track-h)';
+    const input = document.createElement('input');
+    input.value = t.name;
+    input.addEventListener('change', (e)=> { state.tracks[i].name = e.target.value; });
+    row.appendChild(input);
+    leftPanel.appendChild(row);
+  });
+
+  // tracks rows
+  // clear rows and keyframes first
+  tracksEl.querySelectorAll('.row').forEach(n=>n.remove());
+  state.tracks.forEach((t,i)=>{
+    const row = document.createElement('div');
+    row.className = 'track-row row';
+    row.style.height = 'var(--track-h)';
+    row.style.top = (i * (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--track-h')) + 8)) + 'px';
+    row.dataset.index = i;
+    const bg = document.createElement('div');
+    bg.className = 'track-bg';
+    row.appendChild(bg);
+    tracksEl.appendChild(row);
+  });
+
+  // keyframes
+  tracksEl.querySelectorAll('.keyframe').forEach(k=>k.remove());
+  state.keyframes.forEach(kf=>{
+    const el = document.createElement('div');
+    el.className = 'keyframe';
+    el.dataset.id = kf.id;
+    const span = document.createElement('span');
+    span.textContent = kf.label || '';
+    el.appendChild(span);
+    positionKeyframeEl(el, kf);
+    makeDraggable(el, kf);
+    tracksEl.appendChild(el);
+  });
+
+  updatePlayhead();
+  updateRangeVisual();
+  timeDisplay.textContent = state.playTime.toFixed(2) + 's';
+}
+
+function chooseRulerInterval(){
+  const pxPerMark = 120;
+  const sec = pxPerMark / state.pxPerSec;
+  const options = [0.25,0.5,1,2,5,10,15,30,60];
+  for(let o of options) if(o>=sec) return o;
+  return 60;
+}
+
+function positionKeyframeEl(el,kf){
+  const trackTop = getTrackTop(kf.trackIndex);
+  const x = secToPx(kf.time);
+  el.style.left = x + 'px';
+  el.style.top = (trackTop + (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--track-h')))/2) + 'px';
+}
+
+function getTrackTop(index){
+  const trackH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--track-h'));
+  const gap = 8;
+  return 12 + index * (trackH + gap);
+}
+
+/* ---------- interactions & dragging ---------- */
+function makeDraggable(el, kf){
+  // open modal on click (single click)
+  el.addEventListener('click', (ev)=>{
+    ev.stopPropagation();
+    openKeyframeModal(kf);
+  });
+
+  // drag
+  el.onpointerdown = (ev)=>{
+    // prevent starting drag when clicking to open modal
+    if(ev.button !== 0) return;
+    ev.preventDefault();
+    el.setPointerCapture(ev.pointerId);
+    const startX = ev.clientX;
+    const startY = ev.clientY;
+    const origLeft = parseFloat(el.style.left);
+    const origTop = parseFloat(el.style.top);
+    const trackH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--track-h'));
+    const gap = 8;
+
+    function move(e){
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      let newLeft = origLeft + dx;
+      let newTop = origTop + dy;
+      newLeft = clamp(newLeft, 0, Math.max(0, secToPx(state.duration)));
+      let t = pxToSec(newLeft);
+      if(state.snap){ const snapSec = Number(state.snapInterval) || 0.25; t = Math.round(t / snapSec) * snapSec; newLeft = secToPx(t); }
+      const index = Math.floor((newTop - 12) / (trackH + gap) + 0.5);
+      const clampedIndex = clamp(index, 0, state.tracks.length-1);
+      kf.time = clamp(t, 0, state.duration);
+      kf.trackIndex = clampedIndex;
+      // keep label in props synced
+      if(!kf.props) kf.props = defaultProps(kf.label || '');
+      kf.props.name = kf.label || kf.props.name;
+      positionKeyframeEl(el, kf);
+      timeDisplay.textContent = state.playTime.toFixed(2) + 's';
+    }
+
+    function up(e){
+      document.removeEventListener('pointermove', move);
+      document.removeEventListener('pointerup', up);
+      el.releasePointerCapture(ev.pointerId);
+      render();
+    }
+
+    document.addEventListener('pointermove', move);
+    document.addEventListener('pointerup', up);
+  };
+
+  // prevent context menu on right click
+  el.oncontextmenu = (ev)=> ev.preventDefault();
+}
+
+/* ---------- add/remove ---------- */
+function addTrack(name){
+  state.tracks.push({name: name || `Effect ${state.tracks.length+1}`});
+  render();
+}
+document.getElementById('add-track').onclick = ()=> addTrack();
+
+document.getElementById('add-key').onclick = ()=>{
+  const t = state.playTime || 0;
+  const k = {id: genId(), trackIndex:0, time:t, label:'', props: defaultProps('')};
+  state.keyframes.push(k);
+  render();
+};
+
+/* ---------- playhead & playback ---------- */
+let rafId = null;
+let lastPlayTime = 0;
+function updatePlayhead(){
+  const x = secToPx(state.playTime);
+  playhead.style.left = x + 'px';
+}
+function play(){
+  if(state.playing) return;
+  state.playing = true;
+  document.getElementById('play').textContent = 'Pause ▮▮';
+  const start = performance.now() - state.playTime*1000;
+  lastPlayTime = state.playTime;
+  function step(now){
+    if(!state.playing){ cancelAnimationFrame(rafId); return; }
+    const prev = state.playTime;
+    state.playTime = clamp((now - start)/1000, 0, state.duration);
+    updatePlayhead();
+    timeDisplay.textContent = state.playTime.toFixed(2) + 's';
+    // trigger highlights for keyframes crossed
+    triggerKeyframeHighlights(prev, state.playTime);
+    if(state.playTime >= state.duration){ stop(); return; }
+    rafId = requestAnimationFrame(step);
+  }
+  rafId = requestAnimationFrame(step);
+}
+function stop(){
+  state.playing = false;
+  document.getElementById('play').textContent = 'Play ▶';
+  state.playTime = 0;
+  updatePlayhead();
+  timeDisplay.textContent = state.playTime.toFixed(2) + 's';
+}
+
+document.getElementById('play').onclick = ()=> { state.playing ? (state.playing=false, document.getElementById('play').textContent='Play ▶') : play(); };
+document.getElementById('stop').onclick = ()=> stop();
+
+/* ---------- highlight logic ---------- */
+function triggerKeyframeHighlights(prevTime, curTime){
+  // handle forward and small backward motions
+  if(curTime >= prevTime){
+    // forward: highlight each kf where prev < kf.time <= cur
+    state.keyframes.forEach(kf=>{
+      if(kf.time > prevTime && kf.time <= curTime + 1e-6){
+        highlightKeyframeById(kf.id);
+      }
+    });
+  } else {
+    // backward: highlight those between cur and prev
+    state.keyframes.forEach(kf=>{
+      if(kf.time > curTime && kf.time <= prevTime + 1e-6){
+        highlightKeyframeById(kf.id);
+      }
+    });
+  }
+}
+
+function highlightKeyframeById(id){
+  const el = tracksEl.querySelector('.keyframe[data-id="'+id+'"]');
+  if(!el) return;
+  el.classList.add('highlight');
+  setTimeout(()=> el.classList.remove('highlight'), 280);
+}
+
+/* ---------- zoom/snap ---------- */
+document.getElementById('zoom-in').onclick = ()=> { state.pxPerSec = Math.min(120, state.pxPerSec * 1.25); scaleInput.value = state.pxPerSec; render(); };
+document.getElementById('zoom-out').onclick = ()=> { state.pxPerSec = Math.max(6, state.pxPerSec / 1.25); scaleInput.value = state.pxPerSec; render(); };
+
+scaleInput.onchange = ()=> { state.pxPerSec = Number(scaleInput.value); render(); };
+durationInput.onchange = ()=> { state.duration = Number(durationInput.value); render(); };
+snapInput.onchange = ()=> { state.snap = snapInput.checked; };
+snapIntervalInput.onchange = ()=> { state.snapInterval = Number(snapIntervalInput.value) || 0.25; };
+
+/* ---------- playhead dragging on timeline ---------- */
+tracksEl.parentElement.addEventListener('pointerdown', (ev)=>{
+  if(ev.target.closest('.keyframe') || ev.target.closest('.handle')) return;
+  const rect = tracksEl.getBoundingClientRect();
+  const x = ev.clientX - rect.left + tracksEl.parentElement.scrollLeft;
+  let t = clamp(pxToSec(x), 0, state.duration);
+  if(state.snap){ const s = Number(state.snapInterval)||0.25; t = Math.round(t/s)*s; }
+  state.playTime = t;
+  updatePlayhead();
+  render();
+});
+
+/* ---------- range selection (draggable handles) ---------- */
+let rangeState = {drag:null};
+function startRange(leftPx, rightPx){
+  state.range = {startPx:leftPx, endPx:rightPx};
+  updateRangeVisual();
+}
+function updateRangeVisual(){
+  if(!state.range){ rangeEl.style.display='none'; return; }
+  const left = state.range.startPx;
+  const right = state.range.endPx;
+  rangeEl.style.display = 'flex';
+  rangeEl.style.left = left + 'px';
+  rangeEl.style.width = Math.max(6, right - left) + 'px';
+}
+function rangePointerDown(e){
+  e.preventDefault();
+  const rect = tracksEl.getBoundingClientRect();
+  const x = e.clientX - rect.left + tracksEl.parentElement.scrollLeft;
+  if(!state.range){
+    const w = secToPx(2);
+    startRange(clamp(x,0,secToPx(state.duration)-w), clamp(x+w, w, secToPx(state.duration)));
+    return;
+  }
+  const leftHandleX = state.range.startPx + rect.left - tracksEl.parentElement.scrollLeft;
+  const rightHandleX = state.range.endPx + rect.left - tracksEl.parentElement.scrollLeft;
+  const distLeft = Math.abs(e.clientX - leftHandleX);
+  const distRight = Math.abs(e.clientX - rightHandleX);
+  if(distLeft < 12) rangeState.drag = 'left';
+  else if(distRight < 12) rangeState.drag = 'right';
+  else rangeState.drag = 'move';
+
+  rangeState.startPageX = e.clientX;
+  rangeState.startLeft = state.range.startPx;
+  rangeState.startRight = state.range.endPx;
+
+  function onMove(ev){
+    const dx = ev.clientX - rangeState.startPageX;
+    if(rangeState.drag === 'left'){
+      let nl = clamp(rangeState.startLeft + dx, 0, state.range.endPx - 6);
+      state.range.startPx = nl;
+    } else if(rangeState.drag === 'right'){
+      let nr = clamp(rangeState.startRight + dx, state.range.startPx + 6, secToPx(state.duration));
+      state.range.endPx = nr;
+    } else {
+      let nl = clamp(rangeState.startLeft + dx, 0, secToPx(state.duration) - (rangeState.startRight - rangeState.startLeft));
+      state.range.startPx = nl;
+      state.range.endPx = nl + (rangeState.startRight - rangeState.startLeft);
+    }
+    updateRangeVisual();
+  }
+
+  function onUp(ev){
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', onUp);
+    rangeState.drag = null;
+  }
+
+  document.addEventListener('pointermove', onMove);
+  document.addEventListener('pointerup', onUp);
+}
+
+rangeEl.addEventListener('pointerdown', rangePointerDown);
+tracksEl.addEventListener('pointerdown', (ev)=>{
+  if(ev.target === tracksEl) {
+    const rect = tracksEl.getBoundingClientRect();
+    const x = ev.clientX - rect.left + tracksEl.parentElement.scrollLeft;
+    const w = secToPx(3);
+    startRange(clamp(x- w/2,0,secToPx(state.duration)-w/2), clamp(x + w/2, w/2, secToPx(state.duration)));
+    render();
+  }
+});
+
+/* ---------- export / import ---------- */
+document.getElementById('export').onclick = ()=>{
+  const data = JSON.stringify({duration:state.duration, pxPerSec:state.pxPerSec, tracks:state.tracks, keyframes:state.keyframes, range:state.range}, null, 2);
+  const blob = new Blob([data], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'sequence.json'; a.click();
+  URL.revokeObjectURL(url);
+};
+
+document.getElementById('import').onclick = ()=> document.getElementById('import-file').click();
+document.getElementById('import-file').onchange = (e)=>{
+  const f = e.target.files[0]; if(!f) return;
+  const reader = new FileReader();
+  reader.onload = ()=> {
+    try{
+      const parsed = JSON.parse(reader.result);
+      state.duration = parsed.duration || state.duration;
+      state.pxPerSec = parsed.pxPerSec || state.pxPerSec;
+      state.tracks = parsed.tracks || state.tracks;
+      state.keyframes = parsed.keyframes || state.keyframes;
+      state.range = parsed.range || null;
+      durationInput.value = state.duration;
+      scaleInput.value = state.pxPerSec;
+      render();
+      alert('Imported sequence.');
+    }catch(err){ alert('Invalid JSON'); }
+  };
+  reader.readAsText(f);
+};
+
+/* ---------- Modal (keyframe editor) ---------- */
+function openKeyframeModal(kf){
+  // build modal
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.innerHTML = `
+    <h3>Effect properties</h3>
+    <div class="row"><label>Name:</label><input id="m-name" type="text"></div>
+    <div class="row"><label>Type:</label>
+      <select id="m-type">
+        <option>EFFECT_A</option>
+        <option>EFFECT_B</option>
+        <option>EFFECT_C</option>
+      </select>
+    </div>
+    <div class="row"><label>Location:</label><input id="m-location" type="text"></div>
+    <div class="row"><label>Coordinates:</label>
+      <div style="flex:1;display:flex;gap:8px">
+        <input id="m-x" type="number" step="0.001" placeholder="x">
+        <input id="m-y" type="number" step="0.001" placeholder="y">
+        <input id="m-z" type="number" step="0.001" placeholder="z">
+      </div>
+    </div>
+    <div class="row"><label>Sequencer:</label><textarea id="m-seq"></textarea></div>
+    <div class="row"><label>Block:</label><input id="m-block" type="text"></div>
+    <div class="row"><label>BlockData:</label><textarea id="m-blockdata"></textarea></div>
+    <div class="row"><label>Duration:</label><input id="m-duration" type="number"></div>
+    <div class="row"><label>Amount:</label><input id="m-amount" type="number"></div>
+    <div class="row"><label>Randomizer:</label><input id="m-rand" type="number" step="0.01"></div>
+    <div class="row"><label>Delay:</label><input id="m-delay" type="number"></div>
+    <div class="row"><label>Time (s):</label><input id="m-time" type="number" step="0.01"></div>
+    <div class="muted">Track index and time can be edited. Click Duplicate to clone this keyframe.</div>
+    <div class="actions">
+      <button id="m-close">Close</button>
+      <button id="m-delete" style="background:#ffecec;border-color:#f1a0a0">Delete</button>
+      <button id="m-dup">Duplicate</button>
+      <button id="m-save">Save</button>
+    </div>
+  `;
+  overlay.appendChild(modal);
+  modalRoot.appendChild(overlay);
+
+  // populate fields
+  const p = kf.props || defaultProps(kf.label || '');
+  modal.querySelector('#m-name').value = p.name || kf.label || '';
+  modal.querySelector('#m-type').value = p.type || 'EFFECT_A';
+  modal.querySelector('#m-location').value = p.location || '';
+  modal.querySelector('#m-x').value = (p.coords && p.coords.x)!=null? p.coords.x : 0;
+  modal.querySelector('#m-y').value = (p.coords && p.coords.y)!=null? p.coords.y : 0;
+  modal.querySelector('#m-z').value = (p.coords && p.coords.z)!=null? p.coords.z : 0;
+  modal.querySelector('#m-seq').value = p.sequencer || '';
+  modal.querySelector('#m-block').value = p.block || '';
+  modal.querySelector('#m-blockdata').value = p.blockData || '';
+  modal.querySelector('#m-duration').value = p.duration || 0;
+  modal.querySelector('#m-amount').value = p.amount || 0;
+  modal.querySelector('#m-rand').value = p.randomizer || 0;
+  modal.querySelector('#m-delay').value = p.delay || 0;
+  modal.querySelector('#m-time').value = kf.time || 0;
+
+  function closeModal(){ overlay.remove(); render(); }
+
+  modal.querySelector('#m-close').onclick = ()=> closeModal();
+
+  modal.querySelector('#m-save').onclick = ()=>{
+    // save back to kf
+    kf.label = modal.querySelector('#m-name').value || kf.label;
+    kf.props = kf.props || {};
+    kf.props.name = modal.querySelector('#m-name').value;
+    kf.props.type = modal.querySelector('#m-type').value;
+    kf.props.location = modal.querySelector('#m-location').value;
+    kf.props.coords = {
+      x: Number(modal.querySelector('#m-x').value)||0,
+      y: Number(modal.querySelector('#m-y').value)||0,
+      z: Number(modal.querySelector('#m-z').value)||0
+    };
+    kf.props.sequencer = modal.querySelector('#m-seq').value;
+    kf.props.block = modal.querySelector('#m-block').value;
+    kf.props.blockData = modal.querySelector('#m-blockdata').value;
+    kf.props.duration = Number(modal.querySelector('#m-duration').value) || 0;
+    kf.props.amount = Number(modal.querySelector('#m-amount').value) || 0;
+    kf.props.randomizer = Number(modal.querySelector('#m-rand').value) || 0;
+    kf.props.delay = Number(modal.querySelector('#m-delay').value) || 0;
+    // time (with snapping)
+    let t = Number(modal.querySelector('#m-time').value) || 0;
+    if(state.snap){ const s = Number(state.snapInterval)||0.25; t = Math.round(t/s)*s; }
+    kf.time = clamp(t, 0, state.duration);
+    closeModal();
+  };
+
+  modal.querySelector('#m-delete').onclick = ()=>{
+    state.keyframes = state.keyframes.filter(x=>x.id !== kf.id);
+    closeModal();
+  };
+
+  modal.querySelector('#m-dup').onclick = ()=>{
+    const copy = JSON.parse(JSON.stringify(kf));
+    copy.id = genId();
+    copy.time = Math.min(state.duration, (kf.time || 0) + (state.snap? (Number(state.snapInterval)||0.25) : 0.25));
+    state.keyframes.push(copy);
+    closeModal();
+  };
+
+  overlay.onclick = (ev)=> { if(ev.target === overlay) closeModal(); };
+}
+
+/* ---------- init ---------- */
+durationInput.value = state.duration;
+scaleInput.value = state.pxPerSec;
+snapInput.checked = state.snap;
+snapIntervalInput.value = state.snapInterval;
+
+ruler.addEventListener('click', (ev)=> {
+  const rect = ruler.getBoundingClientRect();
+  const x = ev.clientX - rect.left;
+  let t = clamp(pxToSec(x),0,state.duration);
+  if(state.snap){ const s = Number(state.snapInterval)||0.25; t = Math.round(t/s)*s; }
+  state.playTime = t;
+  updatePlayhead();
+  render();
+});
+
+render();
+</script>
+</body>
+</html>

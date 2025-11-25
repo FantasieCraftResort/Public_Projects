@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Show Sequencer — Timeline (Improved)</title>
+    <style>
+      :root {
+        --bg: #0f1724;
+        --panel: #0b1220;
+        --muted: #9aa4b2;
+        --accent: #6ee7b7;
+        --track: #0c1722;
+        --height-track: 56px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        background: linear-gradient(180deg, #071022 0%, #081425 100%);
+        color: #e6eef6;
+        font-family: Inter, Segoe UI, Roboto, system-ui, Arial;
+        margin: 0;
+        padding: 24px;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 0 12px;
+      }
+
+      .btn {
+        background: linear-gradient(180deg, #132036, #0e1b2c);
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        padding: 8px 12px;
+        border-radius: 8px;
+        color: var(--muted);
+        cursor: pointer;
+      }
+      .btn.primary {
+        color: #022f1f;
+        background: var(--accent);
+        border: none;
+      }
+
+      .sequencer {
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        background: linear-gradient(180deg, #071827 0%, #071b2a 100%);
+        position: relative;
+      }
+
+      /* header (time ruler) */
+      .ruler {
+        display: flex;
+        align-items: center;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      }
+      .ruler .left {
+        width: 180px;
+        padding: 12px 16px;
+        background: linear-gradient(90deg, #07101a, #071722);
+        border-right: 1px solid rgba(255, 255, 255, 0.02);
+      }
+      .ruler .left .title {
+        font-weight: 600;
+      }
+
+      .ruler .scale {
+        flex: 1;
+        overflow: auto;
+        padding: 12px;
+      }
+      .scale-inner {
+        position: relative;
+        height: 28px;
+        min-width: 1200px;
+      }
+      .tick {
+        position: absolute;
+        top: 0;
+        height: 100%;
+        border-left: 1px solid rgba(255, 255, 255, 0.04);
+        font-size: 12px;
+        color: var(--muted);
+        padding-left: 6px;
+      }
+
+      /* tracks area */
+      .tracks {
+        max-height: 360px;
+        overflow: auto;
+      }
+      .track {
+        display: flex;
+        align-items: center;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+        min-height: var(--height-track);
+      }
+      .track .left {
+        width: 180px;
+        padding: 12px 16px;
+        background: linear-gradient(90deg, #07101a, #071722);
+        border-right: 1px solid rgba(255, 255, 255, 0.02);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .track .left .delete-btn {
+        cursor: pointer;
+        color: #e88;
+        background: transparent;
+        border: 0;
+        font-size: 16px;
+        line-height: 1;
+        padding: 0 4px;
+      }
+      .track .left .label {
+        font-weight: 600;
+        cursor: text;
+      }
+
+      .track .content {
+        flex: 1;
+        overflow: auto;
+        padding: 12px;
+      }
+      .track .content .row {
+        height: var(--height-track);
+        min-width: 1200px;
+        background: linear-gradient(
+          90deg,
+          rgba(255, 255, 255, 0.01),
+          transparent
+        );
+      }
+
+      .editable {
+        background: transparent;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: inherit;
+        font-size: 15px;
+        font-weight: 600;
+        border-radius: 6px;
+        padding: 6px 8px;
+      }
+
+      /* playhead */
+      .playhead {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #ff5555;
+        cursor: ew-resize;
+        z-index: 20;
+        transform: translateX(-1px);
+      }
+      .playhead-handle {
+        position: absolute;
+        top: 6px;
+        left: -6px;
+        width: 14px;
+        height: 24px;
+        background: #ff5555;
+        border-radius: 4px;
+        cursor: ew-resize;
+      }
+
+      /* bottom bar */
+      .bottom-add {
+        padding: 12px;
+        text-align: center;
+        border-top: 1px solid rgba(255, 255, 255, 0.04);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Show Sequencer — Timeline</h1>
+
+    <div class="sequencer" id="sequencer">
+      <div class="ruler">
+        <div class="left"><div class="title">Tracks</div></div>
+        <div class="scale" id="scale">
+          <div class="scale-inner" id="scaleInner"></div>
+        </div>
+      </div>
+
+      <div class="tracks" id="tracks"></div>
+
+      <div id="playhead" class="playhead" style="left: 0px">
+        <div class="playhead-handle"></div>
+      </div>
+
+      <div class="bottom-add">
+        <label style="color: var(--muted); margin-right: 8px"
+          >Snap distance (px):</label
+        >
+        <input
+          id="snapInput"
+          type="number"
+          min="0"
+          value="0"
+          style="
+            width: 80px;
+            padding: 6px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: #0d1a27;
+            color: #e6eef6;
+            margin-right: 16px;
+          "
+        />
+        <button id="addTrack" class="btn primary">+ Add Line</button>
+      </div>
+    </div>
+
+    <script>
+      const TIMELINE_PIXELS = 1200; // total width in px
+      const SECONDS_TOTAL = 12; // 0..12 seconds timeline
+      const MARKER_COUNT = 12;
+
+      const tracksContainer = document.getElementById("tracks");
+      const scaleInner = document.getElementById("scaleInner");
+      const scaleEl = document.getElementById("scale");
+      const addBtn = document.getElementById("addTrack");
+      const sequencerEl = document.getElementById("sequencer");
+
+      let trackCounter = 0;
+
+      function renderScale() {
+        scaleInner.style.width = TIMELINE_PIXELS + "px";
+        scaleInner.innerHTML = "";
+        for (let i = 0; i <= MARKER_COUNT; i++) {
+          const left = (TIMELINE_PIXELS / MARKER_COUNT) * i;
+          const tick = document.createElement("div");
+          tick.className = "tick";
+          tick.style.left = left + "px";
+          tick.innerText = i;
+          scaleInner.appendChild(tick);
+        }
+      }
+
+      function createTrack(name) {
+        trackCounter++;
+        const id = "track-" + trackCounter;
+
+        const track = document.createElement("div");
+        track.className = "track";
+        track.dataset.id = id;
+
+        // left panel
+        const left = document.createElement("div");
+        left.className = "left";
+
+        const del = document.createElement("button");
+        del.className = "delete-btn";
+        del.innerText = "✕";
+        del.title = "Delete track";
+        del.addEventListener("click", () => deleteTrack(track));
+
+        const label = document.createElement("div");
+        label.className = "label";
+        label.textContent = name || "Effect " + trackCounter;
+        label.title = "Double-click to rename";
+        label.addEventListener("dblclick", () => startRename(label));
+
+        left.appendChild(del);
+        left.appendChild(label);
+
+        // content area
+        const content = document.createElement("div");
+        content.className = "content";
+        const row = document.createElement("div");
+        row.className = "row";
+        content.appendChild(row);
+
+        track.appendChild(left);
+        track.appendChild(content);
+
+        tracksContainer.appendChild(track);
+
+        // sync horizontal scroll with ruler
+        scaleEl.addEventListener("scroll", () => {
+          content.scrollLeft = scaleEl.scrollLeft;
+        });
+        content.addEventListener("scroll", () => {
+          scaleEl.scrollLeft = content.scrollLeft;
+        });
+
+        return track;
+      }
+
+      function deleteTrack(trackEl) {
+        if (!confirm("Delete this line?")) return;
+        trackEl.remove();
+      }
+
+      function startRename(labelEl) {
+        const current = labelEl.textContent;
+        const input = document.createElement("input");
+        input.type = "text";
+        input.value = current;
+        input.className = "editable";
+        labelEl.replaceWith(input);
+        input.focus();
+        input.select();
+
+        function finish() {
+          const newName = input.value.trim() || current;
+          const newLabel = document.createElement("div");
+          newLabel.className = "label";
+          newLabel.textContent = newName;
+          newLabel.title = "Double-click to rename";
+          newLabel.addEventListener("dblclick", () => startRename(newLabel));
+          input.replaceWith(newLabel);
+        }
+
+        input.addEventListener("blur", finish);
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") input.blur();
+          if (e.key === "Escape") {
+            input.value = current;
+            input.blur();
+          }
+        });
+      }
+
+      addBtn.addEventListener("click", () => createTrack());
+
+      renderScale();
+      createTrack("Effect 1");
+      createTrack("Effect 2");
+      createTrack("Effect 3");
+
+      // --- Playhead & snapping logic (stable) ---
+      let snapDistance = 0;
+      const snapInput = document.getElementById("snapInput");
+      snapInput.addEventListener("input", () =>
+        setSnapDistance(snapInput.value)
+      );
+
+      const playhead = document.getElementById("playhead");
+      const playheadHandle = playhead.querySelector(".playhead-handle");
+
+      // compute left offset of the timeline content (scaleInner) relative to the sequencer
+      function getScaleInnerLeft() {
+        const seqRect = sequencerEl.getBoundingClientRect();
+        const scaleInnerRect = scaleInner.getBoundingClientRect();
+        return scaleInnerRect.left - seqRect.left; // pixels from sequencer left to content-left (0 time)
+      }
+
+      // position playhead given content-space X (0..TIMELINE_PIXELS)
+      function positionPlayheadAtContentX(contentX) {
+        const scaleInnerLeft = getScaleInnerLeft();
+        const visibleX = contentX - scaleEl.scrollLeft; // how far from left of visible scale
+        const leftPos = scaleInnerLeft + visibleX; // absolute from sequencer left
+        playhead.style.left = leftPos + "px";
+      }
+
+      // initialize at 0
+      positionPlayheadAtContentX(0);
+
+      function getContentXFromEvent(e) {
+        const scaleRect = scaleEl.getBoundingClientRect();
+        // pointer relative to scale left plus scroll gives content coordinate
+        const x = e.clientX - scaleRect.left + scaleEl.scrollLeft;
+        return x;
+      }
+
+      function clampContentX(x) {
+        if (x < 0) return 0;
+        if (x > TIMELINE_PIXELS) return TIMELINE_PIXELS;
+        return x;
+      }
+
+      let dragging = false;
+
+      function onPointerMove(e) {
+        if (!dragging) return;
+        e.preventDefault();
+        let contentX = getContentXFromEvent(e);
+        contentX = clampContentX(contentX);
+        if (snapDistance > 0) {
+          const snapPx = (snapDistance / SECONDS_TOTAL) * TIMELINE_PIXELS;
+          contentX = Math.round(contentX / snapPx) * snapPx;
+        }
+        positionPlayheadAtContentX(contentX);
+      }
+
+      function onPointerUp() {
+        dragging = false;
+        document.removeEventListener("pointermove", onPointerMove);
+        document.removeEventListener("pointerup", onPointerUp);
+      }
+
+      playheadHandle.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        dragging = true;
+        document.addEventListener("pointermove", onPointerMove);
+        document.addEventListener("pointerup", onPointerUp);
+      });
+
+      // also allow clicking on the scale to move playhead
+      scaleEl.addEventListener("pointerdown", (e) => {
+        const contentX = clampContentX(getContentXFromEvent(e));
+        const snapped =
+          snapDistance > 0
+            ? Math.round(contentX / snapDistance) * snapDistance
+            : contentX;
+        positionPlayheadAtContentX(snapped);
+      });
+
+      window.setSnapDistance = (v) => (snapDistance = Number(v) || 0); // v in seconds
+    </script>
+  </body>
+</html>

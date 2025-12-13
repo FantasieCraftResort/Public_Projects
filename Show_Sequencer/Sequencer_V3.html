@@ -678,5 +678,66 @@
 
 
     </script>
+    
+# Show Sequencer — Timeline with Keyframe Info
+## Show Sequencer — Timeline
+
+Tracks
+Snap distance (sec): + Add Line + Add Keyframe
+Generate Output
+
+<!-- Export Options Section -->
+<div id="export-options" style="margin-top:20px;">
+  <h3>Export Options</h3>
+  <label><input type="checkbox" id="export-time" checked> Time</label>
+  <label><input type="checkbox" id="export-time-diff" checked> Time Difference</label>
+  <label><input type="checkbox" id="export-line" checked> Line</label>
+  <button id="export-csv" style="margin-left:10px;">Export to CSV</button>
+</div>
+
+<script>
+// Sample keyframe data structure for demonstration
+let keyframes = [
+  {time: 0, timeDiff: 0, line: 'Intro'},
+  {time: 5, timeDiff: 5, line: 'Scene 1'},
+  {time: 10, timeDiff: 5, line: 'Scene 2'}
+];
+
+
+function exportToCSV() {
+    let includeTime = document.getElementById('export-time').checked;
+    let includeTimeDiff = document.getElementById('export-time-diff').checked;
+    let includeLine = document.getElementById('export-line').checked;
+    let selectedLine = document.getElementById('line-select').value;
+
+    let headers = [];
+    if (includeTime) headers.push('Time');
+    if (includeTimeDiff) headers.push('Time Difference');
+    if (includeLine) headers.push('Line');
+
+    let rows = [headers.join(',')];
+
+    keyframes.forEach(kf => {
+        if (selectedLine === 'all' || kf.line === selectedLine) {
+            let row = [];
+            if (includeTime) row.push(kf.time);
+            if (includeTimeDiff) row.push(kf.timeDiff);
+            if (includeLine) row.push(kf.line);
+            rows.push(row.join(','));
+        }
+    });
+
+    let csvContent = rows.join('\n'); // ✅ Corrected newline
+    let blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    let link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'timeline_export.csv';
+    link.click();
+}
+
+
+document.getElementById('export-csv').addEventListener('click', exportToCSV);
+</script>
+
   </body>
 </html>

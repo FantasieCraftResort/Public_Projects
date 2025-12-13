@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Key Press Timer</title>
+    <style>
+      body {
+        font-family: monospace;
+        background: #111;
+        color: #0f0;
+        padding: 20px;
+      }
+      input,
+      button {
+        margin: 5px;
+      }
+      #output {
+        margin-top: 20px;
+        white-space: pre;
+      }
+      #keyInput {
+        width: 150px;
+        text-align: center;
+      }
+      .timers {
+        margin-top: 15px;
+        padding: 10px;
+        border: 1px solid #0f0;
+        border-radius: 5px;
+        width: fit-content;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Key Press Timer</h1>
+
+    <label for="keyInput">Press key to track: </label>
+    <input type="text" id="keyInput" placeholder="Press any key" readonly />
+    <br />
+
+    <label for="stopTime">Stop after (seconds): </label>
+    <input type="number" id="stopTime" value="10" step="0.1" />
+    <br />
+
+    <label for="maxDelta">Stop if delta t > (seconds): </label>
+    <input type="number" id="maxDelta" value="2" step="0.1" />
+    <br />
+
+    <button onclick="startTimer()">Start</button>
+    <button onclick="resetTimer()">Reset</button>
+
+    <div class="timers">
+      <div>Current Δt: <span id="deltaDisplay">0.00</span> s</div>
+      <div>Total t: <span id="totalDisplay">0.00</span> s</div>
+    </div>
+
+    <div id="output"></div>
+
+    <script>
+      let trackingKey = null;
+      let startTime = null;
+      let lastTime = null;
+      let stopAfter = 10;
+      let maxDelta = 2;
+      let running = false;
+      let finished = false;
+      let selectingKey = false; // NEW: track when we are selecting a key
+
+      const deltaDisplay = document.getElementById("deltaDisplay");
+      const totalDisplay = document.getElementById("totalDisplay");
+      const keyInput = document.getElementById("keyInput");
+
+      // When focusing key input → enter key selection mode
+      keyInput.addEventListener("focus", () => {
+        selectingKey = true;
+      });
+
+      // Capture key when input is focused
+      keyInput.addEventListener("keydown", (e) => {
+        e.preventDefault();
+        trackingKey = e.key;
+        keyInput.value = trackingKey === " " ? "Space" : trackingKey;
+        keyInput.blur(); // auto blur after selecting
+      });
+
+      // When input loses focus → stop key selection mode
+      keyInput.addEventListener("blur", () => {
+        selectingKey = false;
+      });
+
+      function startTimer() {
+        if (!trackingKey) {
+          alert("Please select a key first!");
+          return;
+        }
+        if (finished) return; // prevent restart after auto-stop
+
+        stopAfter = parseFloat(document.getElementById("stopTime").value);
+        maxDelta = parseFloat(document.getElementById("maxDelta").value);
+        startTime = performance.now();
+        lastTime = startTime;
+        running = true;
+        finished = false;
+        document.getElementById(
+          "output"
+        ).textContent = `Tracking key "${trackingKey}"...\n`;
+        updateLoop();
+      }
+
+      function resetTimer() {
+        running = false;
+        finished = false;
+        document.getElementById("output").textContent = "";
+        startTime = null;
+        lastTime = null;
+        deltaDisplay.textContent = "0.00";
+        totalDisplay.textContent = "0.00";
+      }
+
+      document.addEventListener("keydown", (e) => {
+        // Ignore ALL keys while selecting the tracking key
+        if (selectingKey) return;
+
+        // Start on first press if not running and not finished
+        if (!running && !finished && e.key === trackingKey) {
+          startTimer();
+          return;
+        }
+
+        // Handle presses while running
+        if (running && e.key === trackingKey) {
+          let now = performance.now();
+          let delta = (now - lastTime) / 1000;
+          document.getElementById("output").textContent += `t=${delta.toFixed(
+            2
+          )}\n`;
+          lastTime = now;
+
+          if (delta > maxDelta) {
+            document.getElementById(
+              "output"
+            ).textContent += `Stopped (delta exceeded ${maxDelta}s)\n`;
+            running = false;
+            finished = true;
+          }
+        }
+      });
+
+      function updateLoop() {
+        if (!running) return;
+
+        let now = performance.now();
+        let total = (now - startTime) / 1000;
+        let delta = (now - lastTime) / 1000;
+
+        totalDisplay.textContent = total.toFixed(2);
+        deltaDisplay.textContent = delta.toFixed(2);
+
+        if (total >= stopAfter) {
+          document.getElementById(
+            "output"
+          ).textContent += `Stopped (total time exceeded ${stopAfter}s)\n`;
+          running = false;
+          finished = true;
+          return;
+        }
+        if (delta > maxDelta) {
+          document.getElementById(
+            "output"
+          ).textContent += `Stopped (delta exceeded ${maxDelta}s)\n`;
+          running = false;
+          finished = true;
+          return;
+        }
+
+        requestAnimationFrame(updateLoop);
+      }
+    </script>
+  </body>
+</html>

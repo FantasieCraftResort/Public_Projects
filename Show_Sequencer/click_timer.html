@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -10,8 +11,7 @@
         color: #0f0;
         padding: 20px;
       }
-      input,
-      button {
+      input, button, select {
         margin: 5px;
       }
       #output {
@@ -29,6 +29,8 @@
         border-radius: 5px;
         width: fit-content;
       }
+      .row { margin: 6px 0; }
+      .inline { display: inline-block; margin-right: 10px; }
     </style>
   </head>
   <body>
@@ -42,16 +44,36 @@
     <input type="number" id="stopTime" value="10" step="0.1" />
     <br />
 
-    <label for="maxDelta">Stop if delta t > (seconds): </label>
+    <label for="maxDelta">Stop if delta t &gt; (seconds): </label>
     <input type="number" id="maxDelta" value="2" step="0.1" />
     <br />
+
+    <div class="row">
+      <div class="inline">
+        <label for="timeMode">Display mode: </label>
+        <select id="timeMode">
+          <option value="delta">Δt (between presses)</option>
+          <option value="absolute">t (since start)</option>
+        </select>
+      </div>
+
+      <!-- NEW: Units toggle button -->
+      <div class="inline">
+        <button id="unitToggle">Units: seconds</button>
+      </div>
+    </div>
 
     <button onclick="startTimer()">Start</button>
     <button onclick="resetTimer()">Reset</button>
 
     <div class="timers">
-      <div>Current Δt: <span id="deltaDisplay">0.00</span> s</div>
-      <div>Total t: <span id="totalDisplay">0.00</span> s</div>
+      <div>
+        <span id="currentLabel">Current Δt</span>:
+        <span id="currentDisplay">0.00</span> <span id="currentUnit">s</span>
+      </div>
+      <div>
+        Total t: <span id="totalDisplay">0.00</span> <span id="totalUnit">s</span>
+      </div>
     </div>
 
     <div id="output"></div>
@@ -64,26 +86,65 @@
       let maxDelta = 2;
       let running = false;
       let finished = false;
-      let selectingKey = false; // NEW: track when we are selecting a key
+      let selectingKey = false;
 
-      const deltaDisplay = document.getElementById("deltaDisplay");
+      // Modes
+      let timeMode = 'delta';        // 'delta' | 'absolute'
+      let unitMode = 'seconds';      // 'seconds' | 'ticks' (1 tick = 1/20 s)
+
+      const currentLabel = document.getElementById("currentLabel");
+      const currentDisplay = document.getElementById("currentDisplay");
+      const currentUnit = document.getElementById("currentUnit");
       const totalDisplay = document.getElementById("totalDisplay");
+      const totalUnit = document.getElementById("totalUnit");
       const keyInput = document.getElementById("keyInput");
+      const timeModeSelect = document.getElementById("timeMode");
+      const unitToggleBtn = document.getElementById("unitToggle");
 
-      // When focusing key input → enter key selection mode
+      // Helpers: convert and format values based on unitMode
+      function toDisplay(valueSeconds) {
+        // Convert raw seconds => display units
+        if (unitMode === 'ticks') return valueSeconds * 20; // ticks
+        return valueSeconds; // seconds
+      }
+      function formatDisplay(valueSeconds) {
+        const v = toDisplay(valueSeconds);
+        if (unitMode === 'ticks') {
+          // ticks are natural counts → show integers
+          return Math.round(v).toString();
+        } else {
+          // seconds → show 2 decimals
+          return v.toFixed(2);
+        }
+      }
+      function unitSuffix() {
+        return unitMode === 'ticks' ? 'ticks' : 's';
+      }
+
+      // Toggle label when time mode changes
+      timeModeSelect.addEventListener("change", () => {
+        timeMode = timeModeSelect.value;
+        currentLabel.textContent = timeMode === 'delta' ? "Current Δt" : "Current t";
+      });
+
+      // NEW: Units toggle button
+      unitToggleBtn.addEventListener("click", () => {
+        unitMode = unitMode === 'seconds' ? 'ticks' : 'seconds';
+        unitToggleBtn.textContent = `Units: ${unitMode}`;
+        currentUnit.textContent = unitSuffix();
+        totalUnit.textContent = unitSuffix();
+      });
+
+      // Key selection handling
       keyInput.addEventListener("focus", () => {
         selectingKey = true;
       });
-
-      // Capture key when input is focused
       keyInput.addEventListener("keydown", (e) => {
         e.preventDefault();
         trackingKey = e.key;
         keyInput.value = trackingKey === " " ? "Space" : trackingKey;
-        keyInput.blur(); // auto blur after selecting
+        keyInput.blur();
       });
-
-      // When input loses focus → stop key selection mode
       keyInput.addEventListener("blur", () => {
         selectingKey = false;
       });
@@ -93,7 +154,7 @@
           alert("Please select a key first!");
           return;
         }
-        if (finished) return; // prevent restart after auto-stop
+        if (finished) return;
 
         stopAfter = parseFloat(document.getElementById("stopTime").value);
         maxDelta = parseFloat(document.getElementById("maxDelta").value);
@@ -101,9 +162,8 @@
         lastTime = startTime;
         running = true;
         finished = false;
-        document.getElementById(
-          "output"
-        ).textContent = `Tracking key "${trackingKey}"...\n`;
+        document.getElementById("output").textContent =
+          `Tracking key "${trackingKey}"...\n`;
         updateLoop();
       }
 
@@ -113,12 +173,15 @@
         document.getElementById("output").textContent = "";
         startTime = null;
         lastTime = null;
-        deltaDisplay.textContent = "0.00";
+        currentDisplay.textContent = "0.00";
         totalDisplay.textContent = "0.00";
+        // Keep units label consistent with current toggle
+        currentUnit.textContent = unitSuffix();
+        totalUnit.textContent = unitSuffix();
       }
 
       document.addEventListener("keydown", (e) => {
-        // Ignore ALL keys while selecting the tracking key
+        // Ignore keys while selecting tracking key
         if (selectingKey) return;
 
         // Start on first press if not running and not finished
@@ -129,17 +192,26 @@
 
         // Handle presses while running
         if (running && e.key === trackingKey) {
-          let now = performance.now();
-          let delta = (now - lastTime) / 1000;
-          document.getElementById("output").textContent += `t=${delta.toFixed(
-            2
-          )}\n`;
+          const now = performance.now();
+          const deltaSec = (now - lastTime) / 1000;
+          const absoluteSec = (now - startTime) / 1000;
+
+          // Log depending on time mode, formatted by unit
+          if (timeMode === 'delta') {
+            document.getElementById("output").textContent +=
+              `Δt=${formatDisplay(deltaSec)} ${unitSuffix()}\n`;
+          } else {
+            document.getElementById("output").textContent +=
+              `t=${formatDisplay(absoluteSec)} ${unitSuffix()}\n`;
+          }
+
+          // Update last press time for Δt logic
           lastTime = now;
 
-          if (delta > maxDelta) {
-            document.getElementById(
-              "output"
-            ).textContent += `Stopped (delta exceeded ${maxDelta}s)\n`;
+          // Stop condition (Δt in seconds; logic unaffected by display units)
+          if (deltaSec > maxDelta) {
+            document.getElementById("output").textContent +=
+              `Stopped (delta exceeded ${maxDelta}s)\n`;
             running = false;
             finished = true;
           }
@@ -149,25 +221,33 @@
       function updateLoop() {
         if (!running) return;
 
-        let now = performance.now();
-        let total = (now - startTime) / 1000;
-        let delta = (now - lastTime) / 1000;
+        const now = performance.now();
+        const totalSec = (now - startTime) / 1000;
+        const deltaSec = (now - lastTime) / 1000;
 
-        totalDisplay.textContent = total.toFixed(2);
-        deltaDisplay.textContent = delta.toFixed(2);
+        // Total always shown
+        totalDisplay.textContent = formatDisplay(totalSec);
+        totalUnit.textContent = unitSuffix();
 
-        if (total >= stopAfter) {
-          document.getElementById(
-            "output"
-          ).textContent += `Stopped (total time exceeded ${stopAfter}s)\n`;
+        // Current shows Δt or absolute, per mode
+        if (timeMode === 'delta') {
+          currentDisplay.textContent = formatDisplay(deltaSec);
+        } else {
+          currentDisplay.textContent = formatDisplay(totalSec);
+        }
+        currentUnit.textContent = unitSuffix();
+
+        // Stop checks (in seconds)
+        if (totalSec >= stopAfter) {
+          document.getElementById("output").textContent +=
+            `Stopped (total time exceeded ${stopAfter}s)\n`;
           running = false;
           finished = true;
           return;
         }
-        if (delta > maxDelta) {
-          document.getElementById(
-            "output"
-          ).textContent += `Stopped (delta exceeded ${maxDelta}s)\n`;
+        if (deltaSec > maxDelta) {
+          document.getElementById("output").textContent +=
+            `Stopped (delta exceeded ${maxDelta}s)\n`;
           running = false;
           finished = true;
           return;

@@ -1,0 +1,849 @@
+<!-- ©FantasieCraft Resort 
+<!DOCTYPE html> declares the document as HTML5 and forces the browser into standards mode for consistent parsing and rendering.-->
+<!DOCTYPE html>
+
+<!-- Set primary language of the page content-->
+<html lang="en">
+  <!-- Container for metadata (data about data) of
+  <title>,
+  <style>,
+  <meta>,
+  <link>,
+  <script>,
+  and <base>.
+
+HTML metadata is data about the HTML document. Metadata is not displayed on the page.
+-->
+  <head>
+    <!--Declares the document uses UTF-8 encoding
+    so Unicode (non‑ASCII, accented characters, emoji) renders correctly-->
+    <meta charset="utf-8" />
+    <!-- Ensures proper rendering and touch zooming on mobile devices-->
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <!-- Set the title of the page in tab-->
+    <title>Show Sequencer — Timeline with Keyframe Info</title>
+    <!-- CSS styles to define the look and layout of the page-->
+    <style>
+      :root {
+        --bg: #0f1724;
+        --panel: #0b1220;
+        --muted: #9aa4b2;
+        --accent: #6ee7b7;
+        --track: #0c1722;
+        --height-track: 56px;
+      }
+      body {
+        background: #081425;
+        color: #e6eef6;
+        font-family: Arial;
+        margin: 0;
+        padding: 24px;
+      }
+      h1 {
+        font-size: 18px;
+        margin-bottom: 12px;
+      }
+      .sequencer {
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.04);
+        background: #071b2a;
+        position: relative;
+      }
+      .ruler {
+        display: flex;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      }
+      .ruler .left {
+        width: 180px;
+        padding: 12px;
+        background: #071722;
+        border-right: 1px solid rgba(255, 255, 255, 0.02);
+      }
+      .ruler .scale {
+        flex: 1;
+        overflow: auto;
+        padding: 12px;
+      }
+      .scale-inner {
+        position: relative;
+        height: 28px;
+        min-width: 1200px;
+      }
+      .tick {
+        position: absolute;
+        top: 0;
+        height: 100%;
+        border-left: 1px solid rgba(255, 255, 255, 0.04);
+        font-size: 12px;
+        color: var(--muted);
+        padding-left: 6px;
+      }
+      .tracks {
+        max-height: 360px;
+        overflow: auto;
+      }
+      .track {
+        display: flex;
+        align-items: center;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+        min-height: var(--height-track);
+        position: relative;
+      }
+      .track .left {
+        width: 180px;
+        padding: 12px;
+        background: #071722;
+        border-right: 1px solid rgba(255, 255, 255, 0.02);
+        display: flex;
+        gap: 8px;
+      }
+      .track .content {
+        flex: 1;
+        overflow: auto;
+        padding: 12px;
+        position: relative;
+      }
+      .row {
+        height: var(--height-track);
+        min-width: 1200px;
+        background: rgba(255, 255, 255, 0.01);
+      }
+      .playhead {
+        position: absolute;
+        width: 2px;
+        background: #ff5555;
+        cursor: ew-resize;
+        z-index: 20;
+        transform: translateX(-1px);
+      }
+      .playhead-handle {
+        position: absolute;
+        top: 6px;
+        left: -6px;
+        width: 14px;
+        height: 24px;
+        background: #ff5555;
+        border-radius: 4px;
+      }
+      .bottom-add {
+        padding: 12px;
+        text-align: center;
+        border-top: 1px solid rgba(255, 255, 255, 0.04);
+      }
+      .keyframe {
+        position: absolute;
+        width: 20px;
+        height: 20px;
+        background: var(--accent);
+        transform: translateY(-50%) rotate(45deg);
+        top: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        color: #022f1f;
+        cursor: pointer;
+      }
+      .keyframe span {
+        transform: rotate(-45deg);
+      }
+      .popup {
+        position: absolute;
+        background: #0d1a27;
+        color: #e6eef6;
+        padding: 8px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        font-size: 14px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        z-index: 999;
+        min-width: 180px;
+      }
+
+      .popup input {
+        display: block;
+        margin-left: auto; /* Push input to the right */
+        text-align: left; /* Keep text inside left-aligned */
+      }
+
+      .popup button {
+        margin-top: 8px;
+        padding: 4px 8px;
+        background: #6ee7b7;
+        color: #022f1f;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Main title-->
+    <h1>Show Sequencer — Timeline</h1>
+    <!-- Sequencer container
+      div.sequencer#sequencer: Main timeline container holding ruler, tracks, playhead, and controls.
+      div.ruler: Top bar that displays time markers and the left title column.
+      div.left (in ruler): Fixed left column for the "Tracks" title / track labels.
+      div.scale#scale → div.scale-inner#scaleInner: Scrollable timeline area where tick marks and time positions are drawn.
+      div.tracks#tracks: Vertical area that contains each track row and its keyframes.
+      div#playhead.playhead: Vertical indicator showing the current time position on the timeline.
+      .playhead-handle: Small draggable handle used to move the playhead.
+      div.bottom-add: Footer controls for snapping, track selection, and adding tracks/keyframes.
+      #snapInput: Numeric input for snap distance (seconds) used when moving keyframes/playhead.
+      #trackSelector: Dropdown to pick which track receives a new keyframe.
+      #addTrack / #addKeyframe: Buttons to add a new track line or add a keyframe at the playhead time.
+      -->
+    <div class="sequencer" id="sequencer">
+      <div class="ruler">
+        <div class="left"><div class="title">Tracks</div></div>
+        <div class="scale" id="scale">
+          <div class="scale-inner" id="scaleInner"></div>
+        </div>
+      </div>
+      <div class="tracks" id="tracks"></div>
+      <div id="playhead" class="playhead" style="left: 0px">
+        <div class="playhead-handle"></div>
+      </div>
+      <div class="bottom-add">
+        <label style="color: var(--muted); margin-right: 8px"
+          >Snap distance (sec):</label
+        >
+        <input
+          id="snapInput"
+          type="number"
+          min="0"
+          value="1"
+          style="
+            width: 80px;
+            padding: 6px;
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: #0d1a27;
+            color: #e6eef6;
+            margin-right: 16px;
+          "
+        />
+        <select
+          id="trackSelector"
+          style="
+            margin-right: 16px;
+            padding: 6px;
+            border-radius: 6px;
+            background: #0d1a27;
+            color: #e6eef6;
+          "
+        ></select>
+        <button id="addTrack" class="btn primary">+ Add Line</button>
+        <button id="addKeyframe" class="btn">+ Add Keyframe</button>
+      </div>
+    </div>
+
+    <div
+      style="
+        margin-top: 20px;
+        background: #071b2a;
+        padding: 12px;
+        border-radius: 8px;
+      "
+    >
+      <button
+        id="generateOutput"
+        style="
+          padding: 8px 12px;
+          background: #6ee7b7;
+          color: #022f1f;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+        "
+      >
+        Generate Output
+      </button>
+      <div
+        id="outputField"
+        style="
+          margin-top: 12px;
+          color: #e6eef6;
+          font-size: 14px;
+          overflow: auto;
+        "
+      ></div>
+    </div>
+
+    <script>
+      // Set the width of the timeline
+      const TIMELINE_PIXELS = 1200,
+        SECONDS_TOTAL = 12,
+        MARKER_COUNT = 12;
+
+      /* Get references to key DOM elements: searches the HTML page for an element
+      with a specific id attribute and returns it as an object so you can manipulate it with JavaScript.*/
+
+      const tracksContainer = document.getElementById("tracks");
+      const scaleInner = document.getElementById("scaleInner");
+      const scaleEl = document.getElementById("scale");
+      const addBtn = document.getElementById("addTrack");
+      const addKeyframeBtn = document.getElementById("addKeyframe");
+      const trackSelector = document.getElementById("trackSelector");
+      const playhead = document.getElementById("playhead");
+      const playheadHandle = playhead.querySelector(".playhead-handle");
+
+      // Counter to assign default track names
+      let trackCounter = 0;
+
+      // Function to render the timeline scale with major and minor tick marks
+      function renderScale() {
+        scaleInner.style.width = TIMELINE_PIXELS + "px";
+        scaleInner.innerHTML = "";
+        const majorStepPx = TIMELINE_PIXELS / MARKER_COUNT;
+        const majorStepSec = SECONDS_TOTAL / MARKER_COUNT;
+        for (let i = 0; i <= MARKER_COUNT; i++) {
+          const left = majorStepPx * i;
+          const tick = document.createElement("div");
+          tick.className = "tick";
+          tick.style.left = left + "px";
+          tick.innerText = (majorStepSec * i).toFixed(1);
+          scaleInner.appendChild(tick);
+          if (i < MARKER_COUNT) {
+            for (let j = 1; j < 10; j++) {
+              const minor = document.createElement("div");
+              minor.className = "tick";
+              minor.style.left = left + (majorStepPx / 10) * j + "px";
+              minor.style.height = "50%";
+              minor.style.borderLeft = "1px solid rgba(255,255,255,0.02)";
+              scaleInner.appendChild(minor);
+            }
+          }
+        }
+      }
+
+      // Function to adjust the playhead height to match the tracks area
+      function updatePlayheadHeight() {
+        const tracksEl = document.getElementById("tracks");
+        const rulerHeight = document.querySelector(".ruler").offsetHeight;
+        playhead.style.top = rulerHeight + "px";
+        playhead.style.height = tracksEl.offsetHeight + "px";
+      }
+
+      // Function to create a new track line in the sequencer
+      function createTrack(name) {
+        trackCounter++;
+        const track = document.createElement("div");
+        track.className = "track";
+
+        const left = document.createElement("div");
+        left.className = "left";
+
+        const label = document.createElement("div");
+        label.className = "label";
+        label.textContent = name || "Effect " + trackCounter;
+
+        // Right-click to open general settings
+        label.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          showTrackSettings(track);
+        });
+
+        // Make label editable on click
+        label.addEventListener("click", () => {
+          const input = document.createElement("input");
+          input.type = "text";
+          input.value = label.textContent;
+          input.style.width = "100%";
+          input.style.background = "#0d1a27";
+          input.style.color = "#e6eef6";
+          input.style.border = "1px solid rgba(255,255,255,0.15)";
+          input.style.borderRadius = "4px";
+          input.style.padding = "4px";
+
+          label.replaceWith(input);
+          input.focus();
+
+          const save = () => {
+            label.textContent = input.value.trim() || label.textContent;
+            input.replaceWith(label);
+            updateTrackSelector();
+          };
+
+          input.addEventListener("blur", save);
+          input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") save();
+          });
+        });
+
+        left.appendChild(label);
+
+        const content = document.createElement("div");
+        content.className = "content";
+        const row = document.createElement("div");
+        row.className = "row";
+        content.appendChild(row);
+
+        track.appendChild(left);
+        track.appendChild(content);
+        tracksContainer.appendChild(track);
+
+        updatePlayheadHeight();
+        updateTrackSelector();
+        return content;
+      }
+
+      // Function to show track general settings popup
+      function showTrackSettings(track) {
+        document.querySelectorAll(".popup").forEach((p) => p.remove());
+
+        const rect = track.querySelector(".label").getBoundingClientRect();
+        const popup = document.createElement("div");
+        popup.className = "popup";
+        popup.style.top = `${rect.top + window.scrollY + 30}px`;
+        popup.style.left = `${rect.left + window.scrollX}px`;
+
+        // Defaults if not set
+        const looping = track.dataset.looping || "false";
+        const loopingDelay = track.dataset.loopingDelay || "0";
+        const loopingInterval = track.dataset.loopingInterval || "200";
+
+        popup.innerHTML = `
+          <strong>General Settings</strong><br>
+          Looping: <select id="trackLooping" style="width:120px">
+            <option value="false" ${
+              looping === "false" ? "selected" : ""
+            }>False</option>
+            <option value="true" ${
+              looping === "true" ? "selected" : ""
+            }>True</option>
+          </select><br>
+          Looping-Delay: <input id="trackLoopingDelay" type="number" value="${loopingDelay}" style="width:80px"><br>
+          Looping-Interval: <input id="trackLoopingInterval" type="number" value="${loopingInterval}" style="width:80px"><br>
+          <button id="saveTrackSettings">Save</button>
+          <button id="closeTrackSettings">Close</button>
+        `;
+
+        document.body.appendChild(popup);
+
+        document.getElementById("closeTrackSettings").onclick = () =>
+          popup.remove();
+
+        document.getElementById("saveTrackSettings").onclick = () => {
+          track.dataset.looping = document.getElementById("trackLooping").value;
+          track.dataset.loopingDelay =
+            document.getElementById("trackLoopingDelay").value;
+          track.dataset.loopingInterval = document.getElementById(
+            "trackLoopingInterval"
+          ).value;
+          popup.remove();
+        };
+      }
+
+      // Function to update the track selector dropdown
+      function updateTrackSelector() {
+        trackSelector.innerHTML = "";
+        const tracks = tracksContainer.querySelectorAll(".track");
+        tracks.forEach((t, i) => {
+          const opt = document.createElement("option");
+          opt.value = i;
+          opt.textContent = t.querySelector(".label").textContent;
+          trackSelector.appendChild(opt);
+        });
+      }
+
+      // Function to create a new keyframe at specified time in seconds
+      function createKeyframe(trackContent, timeSec, name) {
+        const keyframe = document.createElement("div");
+        keyframe.className = "keyframe";
+        const span = document.createElement("span");
+        span.textContent = name.charAt(0).toUpperCase();
+        keyframe.appendChild(span);
+        const px = (timeSec / SECONDS_TOTAL) * TIMELINE_PIXELS;
+        keyframe.style.left = px + "px";
+
+        // Store metadata
+        keyframe.dataset.name = name;
+        keyframe.dataset.timeSec = timeSec;
+        keyframe.dataset.effect = "Placeholder";
+
+        // Right-click to show info
+        keyframe.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          showKeyframeInfo(keyframe, trackContent);
+        });
+
+        enableKeyframeDrag(keyframe);
+        trackContent.appendChild(keyframe);
+      }
+
+      // Function to show keyframe info/edit popup
+      function showKeyframeInfo(keyframe, trackContent) {
+        document.querySelectorAll(".popup").forEach((p) => p.remove());
+
+        const timeSec = parseFloat(keyframe.dataset.timeSec);
+        const keyframes = [...trackContent.querySelectorAll(".keyframe")].sort(
+          (a, b) =>
+            parseFloat(a.dataset.timeSec) - parseFloat(b.dataset.timeSec)
+        );
+        const index = keyframes.indexOf(keyframe);
+        const prevTime =
+          index > 0 ? parseFloat(keyframes[index - 1].dataset.timeSec) : 0;
+        const relativeTime = timeSec - prevTime;
+
+        const rect = keyframe.getBoundingClientRect();
+        const popup = document.createElement("div");
+        popup.className = "popup";
+        popup.style.top = `${rect.top + window.scrollY + 30}px`;
+        popup.style.left = `${rect.left + window.scrollX}px`;
+
+        popup.innerHTML = `
+          <strong>Edit Keyframe</strong>
+          <button id="infoBtn" style="float:right; background:#6ee7b7; color:#022f1f; border:none; border-radius:4px; padding:2px 6px; cursor:pointer;">?</button><br>
+          Type: <input id="kfType" type="text" value="${
+            keyframe.dataset.type || "Effect"
+          }"><br>
+          World: <input id="kfWorld" type="text" value="${
+            keyframe.dataset.world || ""
+          }"><br>
+          Coordinates: <input id="kfCoordinates" type="text" value="${
+            keyframe.dataset.coordinates || ""
+          }"><br>
+          Sequencer: <input id="kfSequencer" type="text" value="${
+            keyframe.dataset.sequencer || ""
+          }"><br>
+          Block: <input id="kfBlock" type="text" value="${
+            keyframe.dataset.block || ""
+          }"><br>
+          BlockData: <input id="kfBlockData" type="text" value="${
+            keyframe.dataset.blockdata || "'[]'"
+          }"><br>
+          Duration (sec): <input id="kfDuration" type="number" step="0.1" value="${
+            keyframe.dataset.duration || 0
+          }"><br>
+          Amount: <input id="kfAmount" type="number" step="0.1" value="${
+            keyframe.dataset.amount || 0
+          }"><br>
+          Randomizer: <input id="kfRandomizer" type="number" step="0.1" value="${
+            keyframe.dataset.randomizer || 0.0
+          }"><br>
+          Delay (sec): <input id="kfDelay" type="number" step="0.1" value="${relativeTime.toFixed(
+            2
+          )}"><br>
+          Time: ${timeSec.toFixed(2)}s<br>
+          <button id="savePopup">Save</button>
+          <button id="deletePopup">Delete</button>
+          <button id="closePopup">Close</button>
+        `;
+
+        document.body.appendChild(popup);
+
+        // Info button popup
+        document.getElementById("infoBtn").onclick = () => {
+          alert(`Formatting Guide:
+      Type: Effect name (e.g., FOUNTAIN_BLOOM)
+      World: World name (e.g., FantasieCraftResort)
+      Coordinates: x, y, z (e.g., 230.5, 63, -122.5)
+      Sequencer: '0: 0.1, 1; 50: 0.4, 1; 100: 0.1, 1'
+      Block: Block name (e.g., BLUE_STAINED_GLASS)
+      BlockData: '[]'
+      Duration: Number in seconds
+      Amount: Integer
+      Randomizer: Decimal (e.g., 0.0)
+      Delay: Seconds after previous keyframe`);
+        };
+
+        // Close button
+        document.getElementById("closePopup").onclick = () => popup.remove();
+
+        // Save button
+        document.getElementById("savePopup").onclick = () => {
+          keyframe.dataset.type = document
+            .getElementById("kfType")
+            .value.trim();
+          keyframe.dataset.world = document
+            .getElementById("kfWorld")
+            .value.trim();
+          keyframe.dataset.coordinates = document
+            .getElementById("kfCoordinates")
+            .value.trim();
+          keyframe.dataset.sequencer = document
+            .getElementById("kfSequencer")
+            .value.trim();
+          keyframe.dataset.block = document
+            .getElementById("kfBlock")
+            .value.trim();
+          keyframe.dataset.blockdata = document
+            .getElementById("kfBlockData")
+            .value.trim();
+          keyframe.dataset.duration = document
+            .getElementById("kfDuration")
+            .value.trim();
+          keyframe.dataset.amount = document
+            .getElementById("kfAmount")
+            .value.trim();
+          keyframe.dataset.randomizer = document
+            .getElementById("kfRandomizer")
+            .value.trim();
+          keyframe.dataset.delay = document
+            .getElementById("kfDelay")
+            .value.trim();
+
+          // Update keyframe label (first letter of Type)
+          keyframe.querySelector("span").textContent = keyframe.dataset.type
+            .charAt(0)
+            .toUpperCase();
+
+          popup.remove();
+        };
+
+        // Delete button
+        document.getElementById("deletePopup").onclick = () => {
+          keyframe.remove();
+          popup.remove();
+        };
+      }
+
+      // Function to enable dragging of keyframes
+      function enableKeyframeDrag(keyframe) {
+        let dragging = false;
+        let grabOffset = 0;
+
+        keyframe.addEventListener("mousedown", (e) => {
+          dragging = true;
+          const rect = keyframe.getBoundingClientRect();
+          grabOffset = e.clientX - rect.left;
+          document.addEventListener("mousemove", onMove);
+          document.addEventListener("mouseup", onUp);
+          e.preventDefault();
+        });
+
+        function onMove(e) {
+          if (!dragging) return;
+          e.preventDefault();
+          const scaleInnerLeft = getScaleInnerLeft();
+          let x = e.clientX - scaleInnerLeft + scaleEl.scrollLeft;
+          x -= grabOffset;
+          x = Math.max(0, Math.min(TIMELINE_PIXELS, x));
+          if (snapDistance > 0) {
+            const snapPx = (snapDistance / SECONDS_TOTAL) * TIMELINE_PIXELS;
+            x = Math.round(x / snapPx) * snapPx;
+          }
+          keyframe.style.left = x + "px";
+          keyframe.dataset.timeSec = (x / TIMELINE_PIXELS) * SECONDS_TOTAL; // update time
+        }
+
+        function onUp(e) {
+          dragging = false;
+          const tracks = tracksContainer.querySelectorAll(".track .content");
+          tracks.forEach((track) => {
+            const rect = track.getBoundingClientRect();
+            if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
+              track.appendChild(keyframe);
+            }
+          });
+          keyframe.style.transform = "translateY(-50%) rotate(45deg)";
+          document.removeEventListener("mousemove", onMove);
+          document.removeEventListener("mouseup", onUp);
+        }
+      }
+
+      // Event listeners for adding tracks and keyframes
+      addBtn.addEventListener("click", () => createTrack());
+
+      // Add keyframe at playhead position
+      addKeyframeBtn.addEventListener("click", () => {
+        const selectedIndex = parseInt(trackSelector.value);
+        const tracks = tracksContainer.querySelectorAll(".track .content");
+        if (tracks[selectedIndex]) {
+          const scaleInnerLeft = getScaleInnerLeft();
+          const playheadLeft =
+            parseFloat(playhead.style.left) -
+            scaleInnerLeft +
+            scaleEl.scrollLeft;
+          const timeSec = (playheadLeft / TIMELINE_PIXELS) * SECONDS_TOTAL;
+          const name = prompt("Enter keyframe name:", "Action") || "Action";
+          createKeyframe(tracks[selectedIndex], timeSec, name);
+        }
+      });
+
+      // Initial setup
+      renderScale();
+      createTrack("Effect 1");
+      createTrack("Effect 2");
+      createTrack("Effect 3");
+      updatePlayheadHeight();
+
+      // Snap distance for playhead and keyframes
+      let snapDistance = 1;
+      const snapInput = document.getElementById("snapInput");
+
+      // Update snap distance on input change
+      snapInput.addEventListener(
+        "input",
+        () => (snapDistance = Number(snapInput.value) || 0)
+      );
+
+      // Playhead dragging and positioning
+      function getScaleInnerLeft() {
+        const seqRect = sequencer.getBoundingClientRect();
+        const scaleInnerRect = scaleInner.getBoundingClientRect();
+        return scaleInnerRect.left - seqRect.left;
+      }
+
+      // Position playhead at specific content X coordinate
+      function positionPlayheadAtContentX(contentX) {
+        const scaleInnerLeft = getScaleInnerLeft();
+        const visibleX = contentX - scaleEl.scrollLeft;
+        const leftPos = scaleInnerLeft + visibleX;
+        playhead.style.left = leftPos + "px";
+      }
+
+      // Initialize playhead position
+      positionPlayheadAtContentX(0);
+      function getContentXFromEvent(e) {
+        const scaleRect = scaleEl.getBoundingClientRect();
+        return e.clientX - scaleRect.left + scaleEl.scrollLeft;
+      }
+
+      // Clamp content X within timeline bounds
+      function clampContentX(x) {
+        return Math.max(0, Math.min(TIMELINE_PIXELS, x));
+      }
+
+      // Dragging state
+      let dragging = false;
+
+      // Update playhead position on pointer move
+      function onPointerMove(e) {
+        if (!dragging) return;
+        e.preventDefault();
+        let contentX = getContentXFromEvent(e);
+        contentX = clampContentX(contentX);
+        if (snapDistance > 0) {
+          const snapPx = (snapDistance / SECONDS_TOTAL) * TIMELINE_PIXELS;
+          contentX = Math.round(contentX / snapPx) * snapPx;
+        }
+        positionPlayheadAtContentX(contentX);
+      }
+
+      // Stop dragging playhead
+      function onPointerUp() {
+        dragging = false;
+        document.removeEventListener("pointermove", onPointerMove);
+        document.removeEventListener("pointerup", onPointerUp);
+      }
+
+      // Event listeners for playhead interactions
+      playheadHandle.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        dragging = true;
+        document.addEventListener("pointermove", onPointerMove);
+        document.addEventListener("pointerup", onPointerUp);
+      });
+
+      // Click on scale to move playhead
+      scaleEl.addEventListener("pointerdown", (e) => {
+        const contentX = clampContentX(getContentXFromEvent(e));
+        const snapped =
+          snapDistance > 0
+            ? Math.round(contentX / snapDistance) * snapDistance
+            : contentX;
+        positionPlayheadAtContentX(snapped);
+      });
+
+      // Update playhead height on window resize
+      window.addEventListener("resize", updatePlayheadHeight);
+
+      // Generate output table on button click
+      document
+
+        // Generate output table
+        .getElementById("generateOutput")
+
+        // Handle button click
+        .addEventListener("click", () => {
+          const tracks = [...tracksContainer.querySelectorAll(".track")];
+
+          // Handle no tracks case
+          if (tracks.length === 0) {
+            document.getElementById("outputField").innerHTML =
+              "<em>No tracks found.</em>";
+            return;
+          }
+
+          // Collect keyframes per track
+          const trackData = tracks.map((track) => {
+            const name = track.querySelector(".label").textContent;
+            const looping = track.dataset.looping || "false";
+            const loopingDelay = track.dataset.loopingDelay || "0";
+            const loopingInterval = track.dataset.loopingInterval || "200";
+
+            const keyframes = [...track.querySelectorAll(".keyframe")].sort(
+              (a, b) =>
+                parseFloat(a.dataset.timeSec) - parseFloat(b.dataset.timeSec)
+            );
+
+            // Calculate relative delays
+            let prevTime = 0;
+
+            // Build keyframe blocks
+            const keyframeBlocks = keyframes.map((kf, i) => {
+              const time = parseFloat(kf.dataset.timeSec);
+              const relative = time - prevTime;
+              prevTime = time;
+
+              // Build keyframe block string
+              return `
+                Settings:
+                  Looping: ${looping}
+                  Looping-Delay: ${loopingDelay}
+                  Looping-Interval: ${loopingInterval}
+                '${i + 1}':
+                  Type: ${kf.dataset.type || "Effect"}
+                  Location: ${kf.dataset.world || ""}${
+                kf.dataset.coordinates ? ", " + kf.dataset.coordinates : ""
+              }
+                  Sequencer: ${kf.dataset.sequencer || ""}
+                  Block: ${kf.dataset.block || ""}
+                  BlockData: ${kf.dataset.blockdata || "'[]'"}
+                  Duration: ${kf.dataset.duration || 0}
+                  Amount: ${kf.dataset.amount || 0}
+                  Randomizer: ${kf.dataset.randomizer || 0.0}
+                  Delay: ${kf.dataset.delay || relative.toFixed(2)}
+                `;
+            });
+
+            return { name, keyframes: keyframeBlocks };
+          });
+
+          // Determine max rows
+          const maxRows = Math.max(...trackData.map((t) => t.keyframes.length));
+
+          // Build table
+          let html = "<table style='border-collapse:collapse; width:100%;'>";
+          html +=
+            "<tr>" +
+            trackData
+              // Header row
+              .map(
+                (t) =>
+                  `<th style='border:1px solid #444; padding:6px; vertical-align:top;'>${t.name}</th>`
+              )
+              .join("") +
+            "</tr>";
+
+          // Data rows
+          for (let i = 0; i < maxRows; i++) {
+            html += "<tr>";
+            trackData.forEach((t) => {
+              html += `<td style='border:1px solid #444; padding:6px; white-space:pre;'>${
+                t.keyframes[i] || ""
+              }</td>`;
+            });
+            html += "</tr>";
+          }
+
+          // Close table
+          html += "</table>";
+          document.getElementById("outputField").innerHTML = html;
+        });
+    </script>
+  </body>
+</html>

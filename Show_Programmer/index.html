@@ -1,0 +1,138 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Coordinate Plotter (Positive Quadrant)</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>Coordinate Plotter</h1>
+
+    <section class="controls" aria-labelledby="overlay-title">
+      <h2 id="overlay-title">Overlay Image</h2>
+      <div class="row">
+        <label for="imgFile">Image file</label>
+        <input type="file" id="imgFile" accept="image/*" />
+      </div>
+      <div class="row">
+        <label for="imgWidthUnits">Image width (units)</label>
+        <input type="number" id="imgWidthUnits" min="0" step="0.1" value="10" />
+      </div>
+      <div class="row">
+        <label for="imgOpacityPercent">Opacity (%)</label>
+        <input type="number" id="imgOpacityPercent" min="0" max="100" step="1" value="40" />
+      </div>
+      <div class="row">
+        <label>Offset (units)</label>
+        <div class="xy">
+          <input type="number" id="imgOffsetX" min="0" step="0.1" value="0" aria-label="Offset X" placeholder="x" />
+          <span class="sep">,</span>
+          <input type="number" id="imgOffsetY" min="0" step="0.1" value="0" aria-label="Offset Y" placeholder="y" />
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" id="clearImage" class="secondary small">Clear image</button>
+      </div>
+      <p class="hint">The image is a semi-transparent overlay anchored by its bottom-left corner at (offset X, offset Y). Width is set in coordinate units; height keeps the natural aspect ratio.</p>
+    </section>
+
+    <section class="controls" aria-labelledby="audio-title">
+      <h2 id="audio-title">Audio Analysis</h2>
+      <div class="row">
+        <label for="audioFile">MP3 file</label>
+        <input type="file" id="audioFile" accept="audio/mpeg,audio/mp3,audio/*" />
+      </div>
+      <div class="row">
+        <label for="winMs">Window (ms)</label>
+        <input type="number" id="winMs" min="10" step="10" value="100" />
+      </div>
+      <div class="row">
+        <label for="hopMs">Hop (ms)</label>
+        <input type="number" id="hopMs" min="5" step="5" value="50" />
+      </div>
+      <div class="row">
+        <label for="thrDb">Threshold (|Δ| dB)</label>
+        <input type="number" id="thrDb" min="0.5" step="0.5" value="3" />
+      </div>
+      <div class="row">
+        <label for="minGap">Min gap (s)</label>
+        <input type="number" id="minGap" min="0" step="0.1" value="1.0" />
+      </div>
+      <div class="actions">
+        <button type="button" id="analyzeBtn" class="small">Analyze</button>
+        <button type="button" id="clearTimelineBtn" class="secondary small">Clear timeline</button>
+      </div>
+      <p class="hint">Click <strong>Analyze</strong> to compute an RMS envelope and detect significant changes. The timeline below will show ticks at the detected moments (no labels).</p>
+    </section>
+
+    <section class="layout">
+      <div class="card table-card">
+        <header class="card-header">
+          <h2>Points</h2>
+        </header>
+        <div class="card-body">
+          <table id="points-table">
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">X</th>
+                <th scope="col">Y</th>
+                <th scope="col" class="actions-col">Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+            <tfoot>
+              <tr class="add-row">
+                <td><input id="add-name" type="text" maxlength="50" placeholder="Name" /></td>
+                <td><input id="add-x" type="number" min="0" step="any" placeholder="0+" /></td>
+                <td><input id="add-y" type="number" min="0" step="any" placeholder="0+" /></td>
+                <td><button type="button" id="add-btn" class="small">Add</button></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <div class="card canvas-card">
+        <header class="card-header split">
+          <h2>Positive X–Y Plot</h2>
+          <div class="legend">
+            <span class="legend-sq" aria-hidden="true"></span> White squares show the first 3 letters of the name
+          </div>
+          <div class="fs-controls">
+            <button type="button" id="fs-btn" class="small">Full screen</button>
+          </div>
+        </header>
+        <div class="card-body">
+          <div id="plot-wrapper" class="plot-wrapper">
+            <canvas id="plot" width="900" height="600" aria-label="XY plot (only positive quadrant)"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="audio-timeline">
+      <div class="card">
+        <header class="card-header">
+          <h2>Audio Timeline</h2>
+        </header>
+        <div class="card-body">
+          <div id="timeline-wrapper" class="timeline-wrapper">
+            <canvas id="timeline" width="900" height="120" aria-label="Detected moments timeline"></canvas>
+          </div>
+          <p id="timeline-meta" class="hint"></p>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <small>Origin at (0, 0). Only positive X and Y are shown. Axis ticks are every 1 unit with equal X and Y spacing.</small>
+    </footer>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>

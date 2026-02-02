@@ -1,0 +1,748 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Color Tracking with Mirrored ROIs (Left, Right, Head)</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        padding: 16px;
+        background: #0b0c10;
+        color: #e9ecf1;
+        font-family:
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          Arial,
+          sans-serif;
+      }
+      h2 {
+        margin: 0 0 8px;
+      }
+      .legend {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin: 8px 0 12px;
+      }
+      .dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        display: inline-block;
+        box-shadow: 0 0 8px currentColor;
+      }
+      .red {
+        color: #ff4d4d;
+      }
+      .yellow {
+        color: #ffd84d;
+      }
+      .blue {
+        color: #5aa0ff;
+      }
+
+      .row {
+        display: flex;
+        gap: 16px;
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      canvas {
+        background: #000;
+        border-radius: 10px;
+        image-rendering: pixelated;
+      }
+      .hint {
+        color: #a6adbb;
+        font-size: 0.9rem;
+      }
+      .tips {
+        color: #97a1b3;
+        font-size: 0.9rem;
+        line-height: 1.35;
+        max-width: 740px;
+      }
+      .code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        background: #12131a;
+        padding: 1px 6px;
+        border-radius: 6px;
+        color: #d2d7ff;
+      }
+
+      .toolbar {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin: 6px 0 8px;
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 6px;
+        background: #12131a;
+        color: #cfd3ff;
+      }
+
+      .roiLabel {
+        display: inline-flex;
+        gap: 8px;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #14161f;
+      }
+      .roiColor {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+      .roiRed {
+        background: #ff4d4d;
+      }
+      .roiYellow {
+        background: #ffd84d;
+      }
+      .roiBlue {
+        background: #5aa0ff;
+      }
+
+      .btn {
+        padding: 4px 10px;
+        border-radius: 6px;
+        border: 1px solid #2a2f3a;
+        background: #12131a;
+        color: #e9ecf1;
+        cursor: pointer;
+      }
+      .btn:hover {
+        background: #171a22;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>
+      Track Head (Dark Blue Hat) + Left (Yellow) + Right (Red) — Mirrored with
+      ROIs
+    </h2>
+
+    <div class="legend">
+      <span class="dot red"></span> Right hand (Red box)
+      <span class="dot yellow"></span> Left hand (Yellow box)
+      <span class="dot blue"></span> Head (Dark blue hat)
+    </div>
+
+    <div class="row">
+      <!-- Left: Mirrored preview with overlays -->
+      <div class="panel">
+        <div class="hint">Preview (mirrored) — overlays + labels</div>
+        <canvas id="view" width="640" height="480"></canvas>
+        <div class="tips">
+          ROIs are drawn on both canvases and operate in mirrored coordinates.
+        </div>
+      </div>
+
+      <!-- Middle: Points-only view -->
+      <div class="panel">
+        <div class="hint">Points view</div>
+        <canvas id="pointView" width="360" height="270"></canvas>
+      </div>
+
+      <!-- Right: Mirrored camera view (ROI picker for hands + head) -->
+      <div class="panel">
+        <div class="hint">
+          Camera (mirrored) — click & drag to set Left/Right/Head ROIs
+        </div>
+
+        <div class="toolbar">
+          <label
+            ><input type="checkbox" id="requireHandRois" checked /> Require hand
+            ROIs</label
+          >
+          <label
+            ><input type="checkbox" id="requireHeadRoi" /> Require head
+            ROI</label
+          >
+
+          <span class="roiLabel">
+            <input
+              type="radio"
+              name="roiTarget"
+              id="roiTargetLeft"
+              value="left"
+              checked
+            />
+            <span class="roiColor roiYellow"></span> Select Left ROI
+          </span>
+
+          <span class="roiLabel">
+            <input
+              type="radio"
+              name="roiTarget"
+              id="roiTargetRight"
+              value="right"
+            />
+            <span class="roiColor roiRed"></span> Select Right ROI
+          </span>
+
+          <span class="roiLabel">
+            <input
+              type="radio"
+              name="roiTarget"
+              id="roiTargetHead"
+              value="head"
+            />
+            <span class="roiColor roiBlue"></span> Select Head ROI
+          </span>
+
+          <button class="btn" id="clearLeft">Clear Left</button>
+          <button class="btn" id="clearRight">Clear Right</button>
+          <button class="btn" id="clearHead">Clear Head</button>
+
+          <span id="roiInfoLeft" class="badge">Left ROI: none</span>
+          <span id="roiInfoRight" class="badge">Right ROI: none</span>
+          <span id="roiInfoHead" class="badge">Head ROI: none</span>
+        </div>
+
+        <canvas
+          id="cameraView"
+          width="640"
+          height="480"
+          style="cursor: crosshair"
+        ></canvas>
+
+        <div class="tips">
+          If colors don’t lock, adjust the HSV constants in code. Lighting and
+          camera white balance can shift hues.
+        </div>
+      </div>
+    </div>
+
+    <video id="cam" autoplay playsinline style="display: none"></video>
+
+    <script>
+      const video = document.getElementById("cam");
+      const view = document.getElementById("view");
+      const vctx = view.getContext("2d");
+      const pointView = document.getElementById("pointView");
+      const pctx = pointView.getContext("2d");
+      const cameraView = document.getElementById("cameraView");
+      const cctx = cameraView.getContext("2d");
+
+      const requireHandRoisEl = document.getElementById("requireHandRois");
+      const requireHeadRoiEl = document.getElementById("requireHeadRoi");
+
+      const roiTargetLeftEl = document.getElementById("roiTargetLeft");
+      const roiTargetRightEl = document.getElementById("roiTargetRight");
+      const roiTargetHeadEl = document.getElementById("roiTargetHead");
+
+      const clearLeftBtn = document.getElementById("clearLeft");
+      const clearRightBtn = document.getElementById("clearRight");
+      const clearHeadBtn = document.getElementById("clearHead");
+
+      const roiInfoLeft = document.getElementById("roiInfoLeft");
+      const roiInfoRight = document.getElementById("roiInfoRight");
+      const roiInfoHead = document.getElementById("roiInfoHead");
+
+      // ---------- Tunables ----------
+      const SCALE = 1.0; // 0.75 or 0.5 lowers CPU
+      const SAMPLE_STEP = 2; // sample every N pixels; 2–4 typical
+      const EMA_ALPHA = 0.2; // smoothing (0..1); lower = smoother
+      const MIN_PIXELS = 60; // ignore tiny detections (after sub-sampling)
+
+      // HSV ranges (H in degrees 0..360, S,V in 0..1). Adjust for your lighting.
+      const RANGE_RED = {
+        // Red wraps around 0/360 → two lobes
+        lobes: [
+          { hMin: 0, hMax: 20, sMin: 0.3, vMin: 0.25, vMax: 1.0 },
+          { hMin: 340, hMax: 360, sMin: 0.3, vMin: 0.25, vMax: 1.0 },
+        ],
+      };
+      // Yellow widened to be robust to warm indoor lighting
+      const RANGE_YELLOW = {
+        hMin: 35,
+        hMax: 80,
+        sMin: 0.25,
+        vMin: 0.45,
+        vMax: 1.0,
+      };
+      // Dark-ish blue; raise vMax if your hat is brighter
+      const RANGE_BLUE = {
+        hMin: 200,
+        hMax: 250,
+        sMin: 0.35,
+        vMin: 0.08,
+        vMax: 0.65,
+      };
+
+      // UI colors
+      const COL_RED = "#ff4d4d";
+      const COL_YELLOW = "#ffd84d";
+      const COL_BLUE = "#5aa0ff";
+
+      // Smoothed outputs
+      const smooth = {
+        red: { x: null, y: null },
+        yellow: { x: null, y: null },
+        blue: { x: null, y: null },
+      };
+
+      // Per-object ROI state (in MIRRORED coordinates)
+      let roiLeft = null; // Yellow (left hand)
+      let roiRight = null; // Red (right hand)
+      let roiHead = null; // Blue (head)
+
+      let selecting = false;
+      let selStart = null;
+      let currentTarget = "left"; // 'left' | 'right' | 'head'
+
+      // UI wiring
+      roiTargetLeftEl.addEventListener("change", () => {
+        if (roiTargetLeftEl.checked) currentTarget = "left";
+      });
+      roiTargetRightEl.addEventListener("change", () => {
+        if (roiTargetRightEl.checked) currentTarget = "right";
+      });
+      roiTargetHeadEl.addEventListener("change", () => {
+        if (roiTargetHeadEl.checked) currentTarget = "head";
+      });
+
+      clearLeftBtn.addEventListener("click", () => {
+        roiLeft = null;
+        updateRoiBadges();
+      });
+      clearRightBtn.addEventListener("click", () => {
+        roiRight = null;
+        updateRoiBadges();
+      });
+      clearHeadBtn.addEventListener("click", () => {
+        roiHead = null;
+        updateRoiBadges();
+      });
+
+      // Mouse events for ROI selection (on mirrored cameraView)
+      cameraView.addEventListener("mousedown", (e) => {
+        const { x, y } = canvasMousePos(cameraView, e);
+        selecting = true;
+        selStart = { x, y };
+        setCurrentRoi({ x, y, w: 0, h: 0 });
+        updateRoiBadges();
+      });
+      cameraView.addEventListener("mousemove", (e) => {
+        if (!selecting) return;
+        const { x, y } = canvasMousePos(cameraView, e);
+        const rect = rectFromPoints(
+          selStart,
+          { x, y },
+          cameraView.width,
+          cameraView.height,
+        );
+        setCurrentRoi(rect);
+        updateRoiBadges();
+      });
+      window.addEventListener("mouseup", () => {
+        selecting = false;
+      });
+
+      // Touch support
+      cameraView.addEventListener(
+        "touchstart",
+        (e) => {
+          const t = e.touches[0];
+          const { x, y } = canvasTouchPos(cameraView, t);
+          selecting = true;
+          selStart = { x, y };
+          setCurrentRoi({ x, y, w: 0, h: 0 });
+          updateRoiBadges();
+          e.preventDefault();
+        },
+        { passive: false },
+      );
+      cameraView.addEventListener(
+        "touchmove",
+        (e) => {
+          if (!selecting) return;
+          const t = e.touches[0];
+          const { x, y } = canvasTouchPos(cameraView, t);
+          const rect = rectFromPoints(
+            selStart,
+            { x, y },
+            cameraView.width,
+            cameraView.height,
+          );
+          setCurrentRoi(rect);
+          updateRoiBadges();
+          e.preventDefault();
+        },
+        { passive: false },
+      );
+      window.addEventListener("touchend", () => {
+        selecting = false;
+      });
+
+      function setCurrentRoi(rect) {
+        if (currentTarget === "left") roiLeft = rect;
+        else if (currentTarget === "right") roiRight = rect;
+        else roiHead = rect;
+      }
+      function updateRoiBadges() {
+        roiInfoLeft.textContent = roiLeft
+          ? `Left ROI: x=${roiLeft.x | 0}, y=${roiLeft.y | 0}, w=${roiLeft.w | 0}, h=${roiLeft.h | 0}`
+          : "Left ROI: none";
+        roiInfoRight.textContent = roiRight
+          ? `Right ROI: x=${roiRight.x | 0}, y=${roiRight.y | 0}, w=${roiRight.w | 0}, h=${roiRight.h | 0}`
+          : "Right ROI: none";
+        roiInfoHead.textContent = roiHead
+          ? `Head ROI: x=${roiHead.x | 0}, y=${roiHead.y | 0}, w=${roiHead.w | 0}, h=${roiHead.h | 0}`
+          : "Head ROI: none";
+      }
+
+      // Start camera
+      start().catch((err) => {
+        console.error(err);
+        alert("Camera error: " + err.message);
+      });
+
+      async function start() {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "user",
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+          },
+          audio: false,
+        });
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+          // Keep canvases same size for easy coordinate mapping
+          const W = Math.round(video.videoWidth * SCALE);
+          const H = Math.round(video.videoHeight * SCALE);
+          view.width = cameraView.width = W;
+          view.height = cameraView.height = H;
+          requestAnimationFrame(loop);
+        };
+      }
+
+      function loop() {
+        const W = view.width,
+          H = view.height;
+
+        // --- Draw PREVIEW (mirrored) ---
+        vctx.save();
+        vctx.scale(-1, 1);
+        vctx.drawImage(video, -W, 0, W, H);
+        vctx.restore();
+
+        // --- Draw CAMERA VIEW (mirrored) ---
+        cctx.save();
+        cctx.scale(-1, 1);
+        cctx.drawImage(
+          video,
+          -cameraView.width,
+          0,
+          cameraView.width,
+          cameraView.height,
+        );
+        cctx.restore();
+
+        // Draw ROIs on both canvases (mirrored coordinates)
+        if (roiLeft) drawRoiRect(cctx, roiLeft, COL_YELLOW);
+        if (roiRight) drawRoiRect(cctx, roiRight, COL_RED);
+        if (roiHead) drawRoiRect(cctx, roiHead, COL_BLUE);
+
+        if (roiLeft) drawRoiRect(vctx, roiLeft, COL_YELLOW);
+        if (roiRight) drawRoiRect(vctx, roiRight, COL_RED);
+        if (roiHead) drawRoiRect(vctx, roiHead, COL_BLUE);
+
+        // --- Color segmentation & accumulation (on mirrored PREVIEW frame) ---
+        const frame = vctx.getImageData(0, 0, W, H);
+        const acc = {
+          red: { sumx: 0, sumy: 0, count: 0 },
+          yellow: { sumx: 0, sumy: 0, count: 0 },
+          blue: { sumx: 0, sumy: 0, count: 0 },
+        };
+        const overlay = new Uint8ClampedArray(frame.data.length);
+
+        const requireHands = requireHandRoisEl.checked;
+        const requireHead = requireHeadRoiEl.checked;
+
+        for (let y = 0; y < H; y += SAMPLE_STEP) {
+          for (let xM = 0; xM < W; xM += SAMPLE_STEP) {
+            const i = 4 * (y * W + xM);
+            const r = frame.data[i] / 255;
+            const g = frame.data[i + 1] / 255;
+            const b = frame.data[i + 2] / 255;
+
+            const { h, s, v } = rgbToHsv(r, g, b);
+
+            // RIGHT (red)
+            if (
+              inRedRange(h, s, v) &&
+              (!requireHands || (roiRight && pointInRect(xM, y, roiRight)))
+            ) {
+              acc.red.sumx += xM;
+              acc.red.sumy += y;
+              acc.red.count++;
+              setOverlay(overlay, i, 255, 40, 40, 110);
+              continue;
+            }
+            // LEFT (yellow)
+            if (
+              inRangeHSV(h, s, v, RANGE_YELLOW) &&
+              (!requireHands || (roiLeft && pointInRect(xM, y, roiLeft)))
+            ) {
+              acc.yellow.sumx += xM;
+              acc.yellow.sumy += y;
+              acc.yellow.count++;
+              setOverlay(overlay, i, 255, 220, 77, 110);
+              continue;
+            }
+            // HEAD (blue)
+            if (
+              inRangeHSV(h, s, v, RANGE_BLUE) &&
+              (!requireHead || (roiHead && pointInRect(xM, y, roiHead)))
+            ) {
+              acc.blue.sumx += xM;
+              acc.blue.sumy += y;
+              acc.blue.count++;
+              setOverlay(overlay, i, 90, 150, 255, 110);
+            }
+          }
+        }
+
+        // Put overlay on preview
+        vctx.putImageData(new ImageData(overlay, W, H), 0, 0);
+
+        // Compute + smooth centroids
+        updateSmooth("red", acc.red);
+        updateSmooth("yellow", acc.yellow);
+        updateSmooth("blue", acc.blue);
+
+        // Draw markers on preview
+        drawMarker(vctx, smooth.red, COL_RED, "Right");
+        drawMarker(vctx, smooth.yellow, COL_YELLOW, "Left");
+        drawMarker(vctx, smooth.blue, COL_BLUE, "Head");
+
+        // Points-only view
+        drawPointsView();
+
+        // ROI hints when required but missing
+        const needLeft = requireHands && !roiLeft;
+        const needRight = requireHands && !roiRight;
+        const needHead = requireHead && !roiHead;
+        if (needLeft || needRight || needHead) {
+          cctx.save();
+          cctx.fillStyle = "rgba(0,0,0,0.5)";
+          cctx.fillRect(0, 0, cameraView.width, cameraView.height);
+          cctx.fillStyle = "#e9ecf1";
+          cctx.font = "16px system-ui";
+          if (needLeft && needRight && needHead) {
+            cctx.fillText("Draw Left, Right, and Head ROIs to start…", 16, 28);
+          } else {
+            let msg = "Missing: ";
+            const parts = [];
+            if (needLeft) parts.push("Left");
+            if (needRight) parts.push("Right");
+            if (needHead) parts.push("Head");
+            cctx.fillText(msg + parts.join(", "), 16, 28);
+          }
+          cctx.restore();
+        }
+
+        requestAnimationFrame(loop);
+      }
+
+      function drawRoiRect(ctx, rect, color) {
+        if (!rect || rect.w <= 0 || rect.h <= 0) return;
+        ctx.save();
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.strokeStyle = color;
+        ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w, rect.h);
+        ctx.restore();
+      }
+
+      function updateSmooth(key, { sumx, sumy, count }) {
+        const s = smooth[key];
+        if (count >= MIN_PIXELS) {
+          const cx = sumx / count;
+          const cy = sumy / count;
+          if (s.x == null || s.y == null) {
+            s.x = cx;
+            s.y = cy;
+          } else {
+            s.x = s.x + EMA_ALPHA * (cx - s.x);
+            s.y = s.y + EMA_ALPHA * (cy - s.y);
+          }
+        } else {
+          s.x = null;
+          s.y = null;
+        }
+      }
+
+      function drawMarker(ctx, pt, color, label) {
+        if (pt.x == null || pt.y == null) return;
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, 8, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = color;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        ctx.font = "14px system-ui";
+        ctx.fillStyle = "#e9ecf1";
+        ctx.strokeStyle = "#111";
+        ctx.lineWidth = 3;
+        ctx.strokeText(label, pt.x + 10, pt.y - 10);
+        ctx.fillText(label, pt.x + 10, pt.y - 10);
+      }
+
+      function drawPointsView() {
+        const W = pointView.width,
+          H = pointView.height;
+        pctx.clearRect(0, 0, W, H);
+        // grid
+        pctx.strokeStyle = "#1b1d24";
+        pctx.lineWidth = 1;
+        for (let x = 0; x < W; x += 40) {
+          pctx.beginPath();
+          pctx.moveTo(x, 0);
+          pctx.lineTo(x, H);
+          pctx.stroke();
+        }
+        for (let y = 0; y < H; y += 40) {
+          pctx.beginPath();
+          pctx.moveTo(0, y);
+          pctx.lineTo(W, y);
+          pctx.stroke();
+        }
+
+        const draw = (pt, color, label) => {
+          if (pt.x == null || pt.y == null) return;
+          const px = (pt.x / view.width) * W;
+          const py = (pt.y / view.height) * H;
+          pctx.beginPath();
+          pctx.arc(px, py, 8, 0, Math.PI * 2);
+          pctx.fillStyle = color;
+          pctx.shadowBlur = 10;
+          pctx.shadowColor = color;
+          pctx.fill();
+          pctx.shadowBlur = 0;
+          pctx.font = "14px system-ui";
+          pctx.fillStyle = "#ddd";
+          pctx.strokeStyle = "#111";
+          pctx.lineWidth = 3;
+          pctx.strokeText(label, px + 10, py - 10);
+          pctx.fillText(label, px + 10, py - 10);
+        };
+
+        draw(smooth.red, COL_RED, "Right");
+        draw(smooth.yellow, COL_YELLOW, "Left");
+        draw(smooth.blue, COL_BLUE, "Head");
+
+        if (!smooth.red.x && !smooth.yellow.x && !smooth.blue.x) {
+          pctx.fillStyle = "#8a93a4";
+          pctx.font = "14px system-ui";
+          pctx.fillText("Waiting for ROIs or visible colors…", 16, H - 16);
+        }
+      }
+
+      // --- Utilities ---
+      function setOverlay(buf, i, r, g, b, a) {
+        buf[i] = Math.max(buf[i], r);
+        buf[i + 1] = Math.max(buf[i + 1], g);
+        buf[i + 2] = Math.max(buf[i + 2], b);
+        buf[i + 3] = Math.max(buf[i + 3], a);
+      }
+      function pointInRect(x, y, rect) {
+        return (
+          rect &&
+          x >= rect.x &&
+          y >= rect.y &&
+          x < rect.x + rect.w &&
+          y < rect.y + rect.h
+        );
+      }
+      function rectFromPoints(a, b, W, H) {
+        const x = Math.max(0, Math.min(a.x, b.x));
+        const y = Math.max(0, Math.min(a.y, b.y));
+        const w = Math.min(W, Math.max(a.x, b.x)) - x;
+        const h = Math.min(H, Math.max(a.y, b.y)) - y;
+        return { x, y, w, h };
+      }
+      function canvasMousePos(canvas, e) {
+        const r = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / r.width;
+        const scaleY = canvas.height / r.height;
+        return {
+          x: (e.clientX - r.left) * scaleX,
+          y: (e.clientY - r.top) * scaleY,
+        };
+      }
+      function canvasTouchPos(canvas, t) {
+        const r = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / r.width;
+        const scaleY = canvas.height / r.height;
+        return {
+          x: (t.clientX - r.left) * scaleX,
+          y: (t.clientY - r.top) * scaleY,
+        };
+      }
+
+      // RGB(0..1) -> HSV({h:0..360, s:0..1, v:0..1})
+      function rgbToHsv(r, g, b) {
+        const max = Math.max(r, g, b),
+          min = Math.min(r, g, b);
+        const d = max - min;
+        let h = 0;
+        if (d !== 0) {
+          switch (max) {
+            case r:
+              h = ((g - b) / d) % 6;
+              break;
+            case g:
+              h = (b - r) / d + 2;
+              break;
+            case b:
+              h = (r - g) / d + 4;
+              break;
+          }
+          h *= 60;
+          if (h < 0) h += 360;
+        }
+        const s = max === 0 ? 0 : d / max;
+        const v = max;
+        return { h, s, v };
+      }
+      function inRangeHSV(h, s, v, range) {
+        return (
+          h >= range.hMin &&
+          h <= range.hMax &&
+          s >= range.sMin &&
+          v >= (range.vMin ?? 0) &&
+          v <= (range.vMax ?? 1)
+        );
+      }
+      function inRedRange(h, s, v) {
+        for (const l of RANGE_RED.lobes) {
+          if (inRangeHSV(h, s, v, l)) return true;
+        }
+        return false;
+      }
+    </script>
+  </body>
+</html>

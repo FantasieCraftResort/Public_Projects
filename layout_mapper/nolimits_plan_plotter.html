@@ -1,0 +1,227 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NoLimits 2 – Plan View Plotter</title>
+<style>
+  :root {
+    --bg: #0b0e11;
+    --ink: #4cc9f0;
+    --grid: #22303a;
+  }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; color: #dee5ed; background: var(--bg); }
+  header { padding: 12px 16px; border-bottom: 1px solid #1f2a33; }
+  main { padding: 12px 16px; display: grid; grid-template-columns: 320px 1fr; gap: 12px; }
+  fieldset { border: 1px solid #1f2a33; border-radius: 8px; padding: 10px; }
+  label { display: block; margin: 6px 0; }
+  .row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+  canvas { width: 100%; height: auto; background: var(--bg); border: 1px solid #1f2a33; border-radius: 6px; }
+  .muted { color: #8aa1b1; font-size: 12px; }
+  .kv { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+  <header>
+    <strong>NoLimits 2 – Plan View Plotter</strong>
+    <div class="muted">Load your exported <code>stc_obj.csv</code>, we will plot <code>PosX</code> vs <code>PosZ</code> (horizontal plan view).</div>
+  </header>
+  <main>
+    <section>
+      <fieldset>
+        <legend>1) Load data</legend>
+        <input type="file" id="file" accept=".csv,text/csv,text/plain" />
+        <div class="muted">Delimiter is auto-detected (tab/comma/semicolon). Columns expected: <code>PosX</code>, <code>PosZ</code>.</div>
+      </fieldset>
+      <fieldset>
+        <legend>2) View options</legend>
+        <label class="row"><input type="checkbox" id="gridToggle" checked /> Show grid</label>
+        <label class="row">Background <input type="color" id="bgColor" value="#0b0e11" /></label>
+        <label class="row">Graph colour <input type="color" id="inkColor" value="#4cc9f0" /></label>
+        <label class="row">Point size <input type="range" id="ptSize" min="0" max="4" value="1" step="1" /><span id="ptSizeLbl" class="kv">1 px</span></label>
+      </fieldset>
+      <fieldset>
+        <legend>3) Data</legend>
+        <div id="info" class="kv"></div>
+      </fieldset>
+    </section>
+    <section>
+      <canvas id="plot" width="1200" height="900"></canvas>
+    </section>
+  </main>
+
+<script>
+(function(){
+  const file = document.getElementById('file');
+  const canvas = document.getElementById('plot');
+  const ctx = canvas.getContext('2d');
+  const gridToggle = document.getElementById('gridToggle');
+  const bgColor = document.getElementById('bgColor');
+  const inkColor = document.getElementById('inkColor');
+  const ptSize = document.getElementById('ptSize');
+  const ptSizeLbl = document.getElementById('ptSizeLbl');
+  const info = document.getElementById('info');
+
+  let points = []; // {x, z}
+  let bbox = null; // {minX, maxX, minZ, maxZ}
+
+  function setCSSVar(name, val) { document.documentElement.style.setProperty(name, val); }
+
+  // ---- FIXED: no HTML entities, correct newline regex and tab escaping ----
+  function parseCSV(text) {
+    // 1) detect delimiter from the first non-empty line
+    const firstLine = text.split(/\r?\n/).find(l => l.trim().length > 0) || '';
+    const delims = ['\t', ';', ',']; // NoLimits exports are usually tab-separated
+    const counts = delims.map(d => (firstLine.match(new RegExp(d === '\t' ? '\\t' : d, 'g')) || []).length);
+    const delim = delims[counts.indexOf(Math.max(...counts))] || ',';
+
+    // 2) split into lines and parse header
+    const lines = text.split(/\r?\n/).filter(l => l.trim().length);
+    if (!lines.length) return { error: 'Empty file' };
+
+    const header = lines[0].split(delim).map(h => h.replace(/^"|"$/g, '').trim());
+    const idxX = header.findIndex(h => /^posx$/i.test(h) || /^x$/i.test(h));
+    const idxZ = header.findIndex(h => /^posz$/i.test(h) || /^z$/i.test(h));
+    if (idxX === -1 || idxZ === -1) {
+      return { error: 'Could not find PosX/PosZ columns in header: ' + header.join(', ') };
+    }
+
+    // 3) rows -> points
+    const pts = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(delim).map(v => v.replace(/^"|"$/g, '').trim());
+      if (cols.length <= Math.max(idxX, idxZ)) continue; // skip malformed
+      const x = parseFloat(cols[idxX]);
+      const z = parseFloat(cols[idxZ]);
+      if (Number.isFinite(x) && Number.isFinite(z)) pts.push({ x, z });
+    }
+    return { points: pts };
+  }
+
+  function computeBBox(pts) {
+    const xs = pts.map(p => p.x);
+    const zs = pts.map(p => p.z);
+    return { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) };
+  }
+
+  function clear() {
+    ctx.save();
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.restore();
+  }
+
+  function drawGrid(bb) {
+    if (!gridToggle.checked || !bb) return;
+    const margin = 40;
+    const w = canvas.width - margin * 2;
+    const h = canvas.height - margin * 2;
+
+    const gridClr = getComputedStyle(document.documentElement).getPropertyValue('--grid').trim();
+    ctx.save();
+    ctx.strokeStyle = gridClr;
+    ctx.lineWidth = 1;
+    ctx.translate(margin, margin);
+
+    const step = 10;
+    for (let i = 0; i <= step; i++) {
+      const x = (i / step) * w;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+    for (let j = 0; j <= step; j++) {
+      const y = (j / step) * h;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+
+    ctx.fillStyle = '#8aa1b1'; ctx.font = '12px ui-monospace, monospace';
+    ctx.fillText('X: ' + bb.minX.toFixed(2) + ' → ' + bb.maxX.toFixed(2), 4, h + 16);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('Z: ' + bb.minZ.toFixed(2) + ' → ' + bb.maxZ.toFixed(2), -h - 16, -8);
+
+    ctx.restore();
+  }
+
+  function plotPoints(pts, bb) {
+    if (!pts.length) return;
+    const margin = 40;
+    const w = canvas.width - margin * 2;
+    const h = canvas.height - margin * 2;
+    const scaleX = w / (bb.maxX - bb.minX || 1);
+    const scaleZ = h / (bb.maxZ - bb.minZ || 1);
+
+    const ink = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim();
+    ctx.save();
+    ctx.translate(margin, margin);
+    ctx.lineWidth = Math.max(1, Math.floor(Math.min(w, h) / 600));
+    ctx.strokeStyle = ink;
+    ctx.fillStyle = ink;
+
+    // polyline
+    ctx.beginPath();
+    for (let i = 0; i < pts.length; i++) {
+      const px = (pts[i].x - bb.minX) * scaleX;
+      const py = h - (pts[i].z - bb.minZ) * scaleZ; // invert Z to screen Y
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+
+    // dots
+    const r = parseInt(ptSize.value, 10);
+    if (r > 0) {
+      for (let i = 0; i < pts.length; i++) {
+        const px = (pts[i].x - bb.minX) * scaleX;
+        const py = h - (pts[i].z - bb.minZ) * scaleZ;
+        ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  function render() { clear(); drawGrid(bbox); plotPoints(points, bbox); }
+
+  function refreshInfo() {
+    if (!points.length) { info.textContent = ''; return; }
+    let len = 0;
+    for (let i = 1; i < points.length; i++) {
+      const dx = points[i].x - points[i - 1].x;
+      const dz = points[i].z - points[i - 1].z;
+      len += Math.hypot(dx, dz);
+    }
+    info.innerHTML =
+      'Points: <b>' + points.length + '</b><br/>' +
+      'X: [' + bbox.minX.toFixed(3) + ', ' + bbox.maxX.toFixed(3) + '] (Δ ' + (bbox.maxX - bbox.minX).toFixed(3) + ')<br/>' +
+      'Z: [' + bbox.minZ.toFixed(3) + ', ' + bbox.maxZ.toFixed(3) + '] (Δ ' + (bbox.maxZ - bbox.minZ).toFixed(3) + ')<br/>' +
+      'Plan length ≈ <b>' + len.toFixed(2) + '</b> units';
+  }
+
+  function handleText(text) {
+    const parsed = parseCSV(text);
+    if (!parsed || parsed.error) { alert(parsed && parsed.error ? parsed.error : 'Could not parse file.'); return; }
+    points = parsed.points;
+    bbox = computeBBox(points);
+    refreshInfo();
+    render();
+  }
+
+  file.addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => handleText(reader.result);
+    reader.readAsText(f);
+  });
+
+  gridToggle.addEventListener('change', render);
+  bgColor.addEventListener('input', () => { setCSSVar('--bg', bgColor.value); render(); });
+  inkColor.addEventListener('input', () => { setCSSVar('--ink', inkColor.value); render(); });
+  ptSize.addEventListener('input', () => { ptSizeLbl.textContent = ptSize.value + ' px'; render(); });
+
+  // init
+  ptSizeLbl.textContent = ptSize.value + ' px';
+  setCSSVar('--bg', bgColor.value);
+  setCSSVar('--ink', inkColor.value);
+})();
+</script>
+</body>
+</html>

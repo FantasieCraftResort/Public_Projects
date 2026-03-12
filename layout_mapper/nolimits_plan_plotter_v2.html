@@ -1,0 +1,345 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name=="viewport" content="width=device-width, initial-scale=1" />
+<title>NoLimits 2 – Plan View Plotter (with Flip + Zoom + Thickness)</title>
+<style>
+  :root {
+    --bg: #0b0e11;
+    --ink: #4cc9f0;
+    --grid: #22303a;
+  }
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; color: #dee5ed; background: var(--bg); }
+  header { padding: 12px 16px; border-bottom: 1px solid #1f2a33; }
+  main { padding: 12px 16px; display: grid; grid-template-columns: 330px 1fr; gap: 12px; }
+  fieldset { border: 1px solid #1f2a33; border-radius: 8px; padding: 10px; }
+  label { display: block; margin: 6px 0; }
+  .row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+  .row > *:first-child { flex: 0 0 auto; }
+  .row input[type="range"] { width: 160px; }
+  .muted { color: #8aa1b1; font-size: 12px; }
+  .kv { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+  button { cursor: pointer; }
+  canvas { width: 100%; height: auto; background: var(--bg); border: 1px solid #1f2a33; border-radius: 6px; }
+</style>
+</head>
+<body>
+  <header>
+    <strong>NoLimits 2 – Plan View Plotter</strong>
+    <div class="muted">Plan view (<code>PosX</code> vs <code>PosZ</code>). Includes auto flip, zooming and line thickness.</div>
+  </header>
+  <main>
+    <section>
+      <fieldset>
+        <legend>1) Load data</legend>
+        <input type="file" id="file" accept=".csv,text/csv,text/plain" />
+        <div class="muted">Delimiter auto-detected (tab/semicolon/comma). Uses <code>PosX</code>, <code>PosZ</code>.</div>
+      </fieldset>
+      <fieldset>
+        <legend>2) View options</legend>
+        <label class="row"><input type="checkbox" id="flipX" checked /> Mirror X (auto-fix export)</label>
+        <label class="row">Show grid <input type="checkbox" id="gridToggle" checked /></label>
+        <label class="row">Background <input type="color" id="bgColor" value="#0b0e11" /></label>
+        <label class="row">Graph colour <input type="color" id="inkColor" value="#4cc9f0" /></label>
+        <label class="row">Point size <input type="range" id="ptSize" min="0" max="5" value="1" step="1" /><span id="ptSizeLbl" class="kv">1 px</span></label>
+        <label class="row">Line width <input type="range" id="lineWidth" min="1" max="8" value="2" step="1" /><span id="lineWidthLbl" class="kv">2 px</span></label>
+      </fieldset>
+      <fieldset>
+        <legend>3) Zoom & Pan</legend>
+        <div class="row">Zoom <input type="range" id="zoom" min="0.25" max="8" value="1" step="0.05" /><span id="zoomLbl" class="kv">1.00×</span></div>
+        <div class="row"><button id="zoomOut">−</button><button id="zoomIn">+</button><button id="fitBtn">Fit</button></div>
+        <div class="muted">Wheel to zoom, drag to pan. <em>Fit</em> resets view.</div>
+      </fieldset>
+      <fieldset>
+        <legend>4) Data</legend>
+        <div id="info" class="kv"></div>
+      </fieldset>
+    </section>
+    <section>
+      <canvas id="plot" width="1200" height="900"></canvas>
+    </section>
+  </main>
+
+<script>
+(function(){
+  const file = document.getElementById('file');
+  const canvas = document.getElementById('plot');
+  const ctx = canvas.getContext('2d');
+
+  // Controls
+  const flipX = document.getElementById('flipX');
+  const gridToggle = document.getElementById('gridToggle');
+  const bgColor = document.getElementById('bgColor');
+  const inkColor = document.getElementById('inkColor');
+  const ptSize = document.getElementById('ptSize');
+  const ptSizeLbl = document.getElementById('ptSizeLbl');
+  const lineWidth = document.getElementById('lineWidth');
+  const lineWidthLbl = document.getElementById('lineWidthLbl');
+  const zoom = document.getElementById('zoom');
+  const zoomLbl = document.getElementById('zoomLbl');
+  const zoomInBtn = document.getElementById('zoomIn');
+  const zoomOutBtn = document.getElementById('zoomOut');
+  const fitBtn = document.getElementById('fitBtn');
+  const info = document.getElementById('info');
+
+  // Data and view state
+  let points = []; // {x, z}
+  let bbox = null; // {minX, maxX, minZ, maxZ}
+  let cx = 0, cz = 0, rangeX = 1, rangeZ = 1; // world center and extents
+
+  const margin = 40; // pad around drawing area
+  let view = { scaleFit: 1, zoom: 1, tx: 0, ty: 0 }; // tx/ty = pan in pixels in drawing space
+
+  function setCSSVar(name, val) { document.documentElement.style.setProperty(name, val); }
+
+  // ---------- Parsing ----------
+  function parseCSV(text) {
+    const firstLine = text.split(/
+?
+/).find(l => l.trim().length > 0) || '';
+    const delims = ['	', ';', ','];
+    const counts = delims.map(d => (firstLine.match(new RegExp(d === '\t' ? '\\t' : d, 'g'))||[]).length);
+    const delim = delims[counts.indexOf(Math.max(...counts))] || ',';
+
+    const lines = text.split(/
+?
+/).filter(l => l.trim().length);
+    if (!lines.length) return { error: 'Empty file' };
+
+    const header = lines[0].split(delim).map(h => h.replace(/^"|"$/g,'').trim());
+    const idxX = header.findIndex(h => /^posx$/i.test(h) || /^x$/i.test(h));
+    const idxZ = header.findIndex(h => /^posz$/i.test(h) || /^z$/i.test(h));
+    if (idxX === -1 || idxZ === -1) {
+      return { error: 'Could not find PosX/PosZ columns in header: ' + header.join(', ') };
+    }
+
+    const pts = [];
+    for (let i=1;i<lines.length;i++) {
+      const cols = lines[i].split(delim).map(v => v.replace(/^"|"$/g,'').trim());
+      if (cols.length <= Math.max(idxX, idxZ)) continue;
+      const x = parseFloat(cols[idxX]);
+      const z = parseFloat(cols[idxZ]);
+      if (Number.isFinite(x) && Number.isFinite(z)) pts.push({x, z});
+    }
+    return { points: pts };
+  }
+
+  function computeBBox(pts) {
+    const xs = pts.map(p => p.x);
+    const zs = pts.map(p => p.z);
+    return { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) };
+  }
+
+  function updateWorldStats() {
+    if (!bbox) return;
+    cx = (bbox.minX + bbox.maxX) / 2;
+    cz = (bbox.minZ + bbox.maxZ) / 2;
+    rangeX = Math.max(1e-9, bbox.maxX - bbox.minX);
+    rangeZ = Math.max(1e-9, bbox.maxZ - bbox.minZ);
+  }
+
+  // ---------- View math ----------
+  function computeFitScale() {
+    const w = canvas.width - margin*2;
+    const h = canvas.height - margin*2;
+    return Math.min(w / rangeX, h / rangeZ);
+  }
+
+  function worldToScreen(x, z) {
+    const w = canvas.width - margin*2;
+    const h = canvas.height - margin*2;
+    const s = view.scaleFit * view.zoom;
+    const mx = flipX.checked ? (2*cx - x) : x; // mirror around world center
+    const px = (mx - cx) * s + w/2 + view.tx;
+    const py = h/2 - (z - cz) * s + view.ty; // invert Z upward
+    return { x: px + margin, y: py + margin };
+  }
+
+  function screenToWorld(px, py) {
+    const w = canvas.width - margin*2;
+    const h = canvas.height - margin*2;
+    const s = view.scaleFit * view.zoom;
+    const lx = px - margin; const ly = py - margin;
+    let x = ( (lx - w/2 - view.tx) / s ) + cx;
+    let z = cz - ( (ly - h/2 - view.ty) / s );
+    if (flipX.checked) {
+      x = 2*cx - x; // invert back if mirrored
+    }
+    return { x, z };
+  }
+
+  // ---------- Drawing ----------
+  function clear() {
+    ctx.save();
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+    ctx.fillRect(0,0,canvas.width, canvas.height);
+    ctx.restore();
+  }
+
+  function drawGrid() {
+    if (!gridToggle.checked || !bbox) return;
+    const w = canvas.width - margin*2;
+    const h = canvas.height - margin*2;
+
+    const gridClr = getComputedStyle(document.documentElement).getPropertyValue('--grid').trim();
+    ctx.save();
+    ctx.strokeStyle = gridClr; ctx.lineWidth = 1;
+    ctx.translate(margin, margin);
+
+    const step = 10;
+    for (let i=0; i<=step; i++) {
+      const x = (i/step) * w;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+    }
+    for (let j=0; j<=step; j++) {
+      const y = (j/step) * h;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+
+    // Labels
+    ctx.fillStyle = '#8aa1b1'; ctx.font = '12px ui-monospace, monospace';
+    ctx.fillText('Zoom: ' + view.zoom.toFixed(2) + '×', 4, h + 16);
+    ctx.restore();
+  }
+
+  function plot() {
+    if (!points.length) return;
+    const ink = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim();
+
+    ctx.save();
+    ctx.strokeStyle = ink;
+    ctx.fillStyle = ink;
+    ctx.lineWidth = parseInt(lineWidth.value, 10);
+
+    // Path
+    ctx.beginPath();
+    for (let i=0;i<points.length;i++) {
+      const p = worldToScreen(points[i].x, points[i].z);
+      if (i===0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+    }
+    ctx.stroke();
+
+    // Points
+    const r = parseInt(ptSize.value, 10);
+    if (r>0) {
+      for (let i=0;i<points.length;i++) {
+        const p = worldToScreen(points[i].x, points[i].z);
+        ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI*2); ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  function render() {
+    clear();
+    drawGrid();
+    plot();
+  }
+
+  function refreshInfo() {
+    if (!points.length) { info.textContent=''; return; }
+    let len = 0; for (let i=1;i<points.length;i++) { const dx = points[i].x - points[i-1].x; const dz = points[i].z - points[i-1].z; len += Math.hypot(dx,dz); }
+    info.innerHTML = 'Points: <b>' + points.length + '</b><br/>' +
+      'X: [' + bbox.minX.toFixed(3) + ', ' + bbox.maxX.toFixed(3) + '] (Δ ' + (bbox.maxX-bbox.minX).toFixed(3) + ')<br/>' +
+      'Z: [' + bbox.minZ.toFixed(3) + ', ' + bbox.maxZ.toFixed(3) + '] (Δ ' + (bbox.maxZ-bbox.minZ).toFixed(3) + ')<br/>' +
+      'Plan length ≈ <b>' + len.toFixed(2) + '</b> units';
+  }
+
+  // ---------- Interactions ----------
+  function fitView() {
+    view.scaleFit = computeFitScale();
+    view.zoom = 1; zoom.value = '1'; zoomLbl.textContent = '1.00×';
+    view.tx = 0; view.ty = 0;
+    render();
+  }
+
+  function clampZoom(z) { return Math.min(8, Math.max(0.25, z)); }
+
+  canvas.addEventListener('wheel', (e) => {
+    if (!points.length) return;
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const before = screenToWorld(mx, my);
+
+    const factor = e.deltaY < 0 ? 1.1 : 0.9;
+    view.zoom = clampZoom(view.zoom * factor);
+    zoom.value = String(view.zoom);
+    zoomLbl.textContent = view.zoom.toFixed(2) + '×';
+
+    // keep world point under cursor stationary
+    const after = worldToScreen(before.x, before.z);
+    view.tx += (mx - after.x);
+    view.ty += (my - after.y);
+
+    render();
+  }, { passive: false });
+
+  let dragging = false; let lastX = 0, lastY = 0;
+  canvas.addEventListener('mousedown', (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; });
+  window.addEventListener('mouseup', () => { dragging = false; });
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - lastX; const dy = e.clientY - lastY;
+    view.tx += dx; view.ty += dy;
+    lastX = e.clientX; lastY = e.clientY;
+    render();
+  });
+
+  zoom.addEventListener('input', () => { view.zoom = clampZoom(parseFloat(zoom.value)); zoomLbl.textContent = view.zoom.toFixed(2) + '×'; render(); });
+  zoomInBtn.addEventListener('click', () => { view.zoom = clampZoom(view.zoom * 1.2); zoom.value = String(view.zoom); zoomLbl.textContent = view.zoom.toFixed(2)+'×'; render(); });
+  zoomOutBtn.addEventListener('click', () => { view.zoom = clampZoom(view.zoom / 1.2); zoom.value = String(view.zoom); zoomLbl.textContent = view.zoom.toFixed(2)+'×'; render(); });
+  fitBtn.addEventListener('click', fitView);
+
+  gridToggle.addEventListener('change', render);
+  bgColor.addEventListener('input', () => { setCSSVar('--bg', bgColor.value); render(); });
+  inkColor.addEventListener('input', () => { setCSSVar('--ink', inkColor.value); render(); });
+  ptSize.addEventListener('input', () => { ptSizeLbl.textContent = ptSize.value + ' px'; render(); });
+  lineWidth.addEventListener('input', () => { lineWidthLbl.textContent = lineWidth.value + ' px'; render(); });
+  flipX.addEventListener('change', render);
+
+  // ---------- File load ----------
+  function handleText(text) {
+    const parsed = parseCSV(text);
+    if (!parsed || parsed.error) { alert(parsed && parsed.error ? parsed.error : 'Could not parse file.'); return; }
+    points = parsed.points;
+    bbox = computeBBox(points);
+    updateWorldStats();
+    refreshInfo();
+    view.scaleFit = computeFitScale();
+    fitView();
+  }
+
+  file.addEventListener('change', (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => handleText(reader.result);
+    reader.readAsText(f);
+  });
+
+  // ---------- Initial ----------
+  function fitCanvas() {
+    const right = canvas.parentElement.getBoundingClientRect();
+    const w = Math.max(600, Math.floor(right.width));
+    const h = Math.floor(w * 3 / 4);
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w; canvas.height = h;
+      if (points.length) { view.scaleFit = computeFitScale(); }
+      render();
+    }
+  }
+  window.addEventListener('resize', fitCanvas);
+  ptSizeLbl.textContent = ptSize.value + ' px';
+  lineWidthLbl.textContent = lineWidth.value + ' px';
+  zoomLbl.textContent = zoom.value + '×';
+  setCSSVar('--bg', bgColor.value);
+  setCSSVar('--ink', inkColor.value);
+  fitCanvas();
+})();
+</script>
+</body>
+</html>

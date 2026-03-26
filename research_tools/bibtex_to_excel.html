@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>BibTeX → Excel Table Converter</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 40px;
+      }
+      textarea {
+        width: 100%;
+        height: 220px;
+        font-size: 14px;
+      }
+      #tableContainer {
+        overflow-x: auto;
+        max-width: 100%;
+        margin-top: 20px;
+      }
+      table {
+        border-collapse: collapse;
+        width: max-content;
+        font-size: 12px;
+      }
+      th,
+      td {
+        border: 1px solid #aaa;
+        padding: 4px 6px;
+        white-space: nowrap;
+      }
+      th {
+        background: #f0f0f0;
+      }
+      button {
+        padding: 8px 14px;
+        margin: 8px 6px 8px 0;
+        cursor: pointer;
+      }
+      #columnToggles {
+        margin: 15px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>BibTeX → Excel Table Converter</h2>
+
+    <p>Paste BibTeX entries:</p>
+    <textarea id="bibtexInput"></textarea><br />
+
+    <button onclick="convertBibtex()">Convert</button>
+    <button onclick="copyTable()">Copy Visible Columns</button>
+
+    <h3>Show / Hide Columns</h3>
+    <div id="columnToggles"></div>
+
+    <h3>Output Table</h3>
+    <div id="tableContainer"><div id="output"></div></div>
+
+    <script>
+      // ============================================================
+      // 1. Column Definitions
+      // ============================================================
+      const columnNames = [
+        "Nr.",
+        "Authors",
+        "Title",
+        "Journal",
+        "Year",
+        "DOI",
+        "Abstract",
+        "Keywords",
+        "Infrastructure Focus",
+        "System Boundary",
+        "Functional Unit",
+        "Impact Categories",
+        "LCA Software",
+        "Key Findings",
+        "Limitations",
+        "Notes",
+      ];
+
+      // ============================================================
+      // 2. Extract BibTeX field values correctly
+      // ============================================================
+      function getField(bib, field) {
+        const regex = new RegExp(field + '\\s*=\\s*[{"](.*?)[}"]', "is");
+        const match = bib.match(regex);
+        return match ? match[1].trim() : "";
+      }
+
+      // ============================================================
+      // 3. DOI formatting — plain text full URL
+      // ============================================================
+      function formatDOI(doi) {
+        if (!doi) return "";
+        return "https://doi.org/" + doi.replace(/[{}"]/g, "").trim();
+      }
+
+      // ============================================================
+      // 4. Build Column Toggles
+      // ============================================================
+      function buildColumnToggles() {
+        const box = document.getElementById("columnToggles");
+        let html = "";
+
+        columnNames.forEach((name, i) => {
+          html += `
+        <label style="margin-right: 12px;">
+            <input type="checkbox" class="colToggle" data-col="${i}" checked>
+            ${name}
+        </label>`;
+        });
+
+        box.innerHTML = html;
+      }
+
+      // ============================================================
+      // 5. Apply Visibility Toggles to Table
+      // ============================================================
+      function applyColumnVisibility() {
+        const toggles = document.querySelectorAll(".colToggle");
+
+        toggles.forEach((toggle) => {
+          const colIndex = parseInt(toggle.dataset.col);
+          const visible = toggle.checked;
+
+          document.querySelectorAll("#resultTable tr").forEach((row) => {
+            const cell = row.children[colIndex];
+            if (cell) cell.style.display = visible ? "" : "none";
+          });
+        });
+      }
+
+      // ============================================================
+      // 6. Convert BibTeX → Table
+      // ============================================================
+      function convertBibtex() {
+        const input = document.getElementById("bibtexInput").value.trim();
+        if (!input) return;
+
+        const entries = input
+          .split("@")
+          .slice(1)
+          .map((e) => "@" + e.trim());
+
+        let html = `<table id="resultTable"><tr>`;
+        columnNames.forEach((c) => (html += `<th>${c}</th>`));
+        html += `</tr>`;
+
+        entries.forEach((bib, index) => {
+          html += `
+        <tr>
+            <td></td>
+            <td>${getField(bib, "author")}</td>
+            <td>${getField(bib, "title")}</td>
+            <td>${getField(bib, "journal")}</td>
+            <td>${getField(bib, "year")}</td>
+            <td>${formatDOI(getField(bib, "doi"))}</td>
+            <td>${getField(bib, "abstract")}</td>
+            <td>${getField(bib, "keywords")}</td>
+            <td></td><td></td><td></td><td></td>
+            <td></td><td></td><td></td><td></td>
+        </tr>`;
+        });
+
+        html += "</table>";
+
+        document.getElementById("output").innerHTML = html;
+
+        applyColumnVisibility();
+      }
+
+      // ============================================================
+      // 7. Copy Table – Only Visible Columns, No Headers
+      // ============================================================
+      function copyTable() {
+        const table = document.getElementById("resultTable");
+        if (!table) return;
+
+        const visibleColumns = Array.from(
+          document.querySelectorAll(".colToggle"),
+        )
+          .map((t, i) => (t.checked ? i : -1))
+          .filter((i) => i !== -1);
+
+        let out = "";
+
+        table.querySelectorAll("tr").forEach((row, rIdx) => {
+          if (rIdx === 0) return; // skip header
+
+          const cells = visibleColumns.map((i) =>
+            row.children[i] ? row.children[i].innerText : "",
+          );
+          out += cells.join("\t") + "\n";
+        });
+
+        navigator.clipboard.writeText(out);
+        alert("Copied visible columns!");
+      }
+
+      // ============================================================
+      // Init Column Toggles
+      // ============================================================
+      buildColumnToggles();
+      document
+        .getElementById("columnToggles")
+        .addEventListener("change", applyColumnVisibility);
+    </script>
+  </body>
+</html>
